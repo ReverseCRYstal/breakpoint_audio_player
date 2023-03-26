@@ -24,6 +24,7 @@ pub mod icon_emojis {
     const PREV_BRK_PT: char = '⏪';
 }
 
+/// Reserved
 pub const WINDOW_TITLE: &str = "player";
 
 pub struct PlayerApp {
@@ -34,9 +35,30 @@ pub struct PlayerApp {
 }
 
 impl PlayerApp {
-    pub fn new(cc: &eframe::CreationContext<'_>,file_path: String) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, file_path: String) -> Self {
         let ctx = &cc.egui_ctx;
-        
+
+        let mut fonts = egui::FontDefinitions::default();
+
+        fonts.font_data.insert(
+            "my_font".to_owned(),
+            egui::FontData::from_static(include_bytes!(
+                "C:\\Users\\Admin\\AppData\\Roaming\\Aseprite\\extensions\\aseprite-theme-pixel\\Zfull-GB.ttf"
+            )));
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "my_font".to_owned());
+
+        // Put my font as last fallback for monospace:
+        fonts
+            .families
+            .entry(egui::FontFamily::Monospace)
+            .or_default()
+            .push("my_font".to_owned());
+
         PlayerApp {
             player: AudioPlayer::default(),
             audio_path: file_path,
@@ -70,6 +92,7 @@ impl eframe::App for PlayerApp {
     }
 }
 
+/// From egui
 fn close_maximize_minimize(ui: &mut egui::Ui, frame: &mut eframe::Frame) {
     use egui::{Button, RichText};
 
@@ -106,6 +129,7 @@ fn close_maximize_minimize(ui: &mut egui::Ui, frame: &mut eframe::Frame) {
     }
 }
 
+/// From egui
 fn title_bar_ui(
     ui: &mut egui::Ui,
     frame: &mut eframe::Frame,
@@ -153,6 +177,7 @@ fn title_bar_ui(
     });
 }
 
+/// From egui
 fn function_bar_ui(
     ui: &mut egui::Ui,
     frame: &mut eframe::Frame,
@@ -171,6 +196,14 @@ fn function_bar_ui(
     );
 }
 
+/// From egui
+///
+/// Feature requires:
+/// Restore the window while double-clicked the function bar
+/// Restore/Maxiumize the window while double-clicked the title bar
+/// Basic window's function
+/// Audio playback operations
+/// Resize the window while drag the window frame  
 fn custom_window_frame(
     ctx: &egui::Context,
     frame: &mut eframe::Frame,
@@ -197,6 +230,8 @@ fn custom_window_frame(
             rect
         };
         title_bar_ui(ui, frame, &title_bar_rect, title);
+
+        ui.menu_button("文件", |ui| {});
 
         let function_bar_height = 64.0;
         let function_bar_rect = {

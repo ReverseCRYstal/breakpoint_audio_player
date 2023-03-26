@@ -27,11 +27,15 @@ impl AudioPlayer {
 
     pub fn play(&self, path: String) {
         let file = std::io::BufReader::new(std::fs::File::open(path.clone()).unwrap());
-        
+
         let source = rodio::Decoder::new(file).unwrap();
-        
+
         self.sink.clear();
         self.sink.append(source);
+    }
+
+    pub fn resume(&self) {
+        self.sink.play()
     }
 
     pub fn pause(&self) {
