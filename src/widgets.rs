@@ -8,14 +8,17 @@ pub fn rounding_button(text: &str, radius: f32) -> egui::Button {
         .rounding(radius / 2.0)
 }
 
-struct RoundingButton{
+struct RoundingButton {
     radius: f32,
     text: String,
 }
 
 impl RoundingButton {
     fn new(radius: f32, text: impl ToString) -> Self {
-        Self { radius:radius, text: text.to_string() }
+        Self {
+            radius: radius,
+            text: text.to_string(),
+        }
     }
 }
 
@@ -31,7 +34,7 @@ impl egui::Widget for &mut RoundingButton {
         // You can query the `ui` how much space is available,
         // but in this example we have a fixed size widget based on the height of a standard button:
         let desired_size = Vec2::splat(self.radius);
-        
+
         // 2. Allocating space:
         // This is where we get a region of the screen assigned.
         // We also tell the Ui to sense clicks in the allocated region.
@@ -43,8 +46,9 @@ impl egui::Widget for &mut RoundingButton {
         }
 
         // Attach some meta-data to the response which can be used by screen readers:
-        response
-            .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, self.text.as_str()));
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, self.text.as_str())
+        });
 
         // 4. Paint!
         // Make sure we need to paint:
@@ -59,7 +63,7 @@ impl egui::Widget for &mut RoundingButton {
             // "how should something that is being interacted with be painted?".
             // This will, for instance, give us different colors when the widget is hovered or clicked.
             let visuals = ui.style().interact(&response);
-            
+
             painter.circle_filled(rect.center(), self.radius, visuals.bg_fill);
 
             // All coordinates are in absolute screen coordinates so we use `rect` to place the elements.
