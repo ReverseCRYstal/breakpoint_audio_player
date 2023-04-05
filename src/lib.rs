@@ -2,7 +2,7 @@
 // #![allow(unused)]
 
 mod audio_player;
-mod setups;
+mod misc;
 mod widgets;
 
 pub mod window_options {
@@ -56,136 +56,48 @@ pub mod window_options {
 use audio_player::AudioPlayer;
 
 use eframe::egui;
+use egui::{vec2, CentralPanel};
+
+use windows::{w, Win32::UI::WindowsAndMessaging};
+use WindowsAndMessaging::{MessageBoxW, IDYES, MB_ICONASTERISK, MB_YESNO};
 
 // Here are some useful emojis that will be used in the future
 // ⏴⏵⏶⏷⏩⏪⏭⏮⏸⏹⏺■▶★☆☐☑↺↻⟲⟳⬅➡⬆⬇⬈⬉⬊⬋⬌⬍⮨⮩⮪⮫⊗✔⛶
 // ∞⎗⎘⎙⏏📾🔀🔁🔃☀☁
 // ☜☝☞☟⛃  ♡ 📅📆 📈📉📊
 pub mod emoji_icons {
-    // Next breakpoint
-    pub const NEXT_BRK_PT: char = '⏩';
-    // Previous breakpoint
-    pub const PREV_BRK_PT: char = '⏪';
-    // Deprecated
+    /// Next breakpoint
+    pub const NEXT_BRK_PT: &str = "⏩";
+    /// Previous breakpoint
+    pub const PREV_BRK_PT: &str = "⏪";
+    pub const PAUSE: &str = "⏸";
+    pub const RESUME: &str = "⏵";
 }
 
 /// Reserved
-pub const WINDOW_TITLE: &str = "player";
+pub const WINDOW_TITLE: &str = "断点音频播放器";
 
 pub struct PlayerApp {
     window_title: String,
     audio_path: String,
     player: AudioPlayer,
-    show_play_control_ui: bool,
-}
-
-/// From egui
-fn close_maximize_minimize(ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-    use egui::{Button, RichText};
-
-    let button_height = 12.0;
-
-    let close_response = ui
-        .add(Button::new(RichText::new("❌").size(button_height)))
-        .on_hover_text("关闭窗口");
-    if close_response.clicked() {
-        frame.close();
-    }
-
-    if frame.info().window_info.maximized {
-        let maximized_response = ui
-            .add(Button::new(RichText::new("🗗").size(button_height)))
-            .on_hover_text("恢复窗口");
-        if maximized_response.clicked() {
-            frame.set_maximized(false);
-        }
-    } else {
-        let maximized_response = ui
-            .add(Button::new(RichText::new("🗗").size(button_height)))
-            .on_hover_text("最大化窗口");
-        if maximized_response.clicked() {
-            frame.set_maximized(true);
-        }
-    }
-
-    let minimized_response = ui
-        .add(Button::new(RichText::new("🗕").size(button_height)))
-        .on_hover_text("最小化窗口");
-    if minimized_response.clicked() {
-        frame.set_minimized(true);
-    }
-}
-
-/// From egui
-/// Render title bar
-fn title_bar_ui(
-    ui: &mut egui::Ui,
-    frame: &mut eframe::Frame,
-    title_bar_rect: &eframe::epaint::Rect,
-    title: &str,
-) {
-    use egui::*;
-
-    let painter = ui.painter();
-
-    let title_bar_response = ui.interact(*title_bar_rect, Id::new("title_bar"), Sense::click());
-
-    // Paint the title:
-    painter.text(
-        title_bar_rect.center(),
-        Align2::CENTER_CENTER,
-        title,
-        FontId::proportional(20.0),
-        ui.style().visuals.text_color(),
-    );
-
-    // Paint the line under the title:
-    painter.line_segment(
-        [
-            title_bar_rect.left_bottom() + vec2(1.0, 0.0),
-            title_bar_rect.right_bottom(),
-        ],
-        ui.visuals().widgets.noninteractive.bg_stroke,
-    );
-
-    // Interact with the title bar (drag to move window):
-    if title_bar_response.double_clicked() {
-        frame.set_maximized(!frame.info().window_info.maximized);
-    } else if title_bar_response.is_pointer_button_down_on() {
-        frame.drag_window();
-    }
-
-    ui.allocate_ui_at_rect(*title_bar_rect, |ui| {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            ui.visuals_mut().button_frame = false;
-            ui.add_space(8.0);
-            close_maximize_minimize(ui, frame);
-        });
-    });
+    // show_play_control_ui: bool,
 }
 
 impl PlayerApp {
     pub fn new(cc: &eframe::CreationContext<'_>, file_path: String) -> Self {
-        setups::setup_font(&cc.egui_ctx);
+        misc::setup_font(&cc.egui_ctx);
 
         PlayerApp {
             player: AudioPlayer::default(),
             audio_path: file_path,
             window_title: WINDOW_TITLE.to_string(),
-            show_play_control_ui: false,
+            // show_play_control_ui: false,
         }
     }
 
     /// From egui
-    fn function_bar_ui(
-        &mut self,
-        ui: &mut egui::Ui,
-        frame: &mut eframe::Frame,
-        function_bar_rect: &eframe::epaint::Rect,
-    ) {
-        use egui::*;
-
+    fn function_bar_ui(&mut self, ui: &mut egui::Ui, function_bar_rect: &eframe::epaint::Rect) {
         let painter = ui.painter();
 
         painter.line_segment(
@@ -195,6 +107,28 @@ impl PlayerApp {
             ],
             ui.visuals().widgets.noninteractive.bg_stroke,
         );
+
+        if ui
+            .add(widgets::rounding_button(emoji_icons::PREV_BRK_PT, 34.0))
+            .clicked()
+        {}
+
+        let play_control_icon = if self.player.is_paused() {
+            emoji_icons::PAUSE
+        } else {
+            emoji_icons::RESUME
+        };
+
+        if ui
+            .add(widgets::rounding_button(play_control_icon, 38.0))
+            .clicked()
+        {
+            self.player.resume();
+        }
+        if ui
+            .add(widgets::rounding_button(emoji_icons::NEXT_BRK_PT, 34.0))
+            .clicked()
+        {}
     }
 
     /// From egui
@@ -211,8 +145,6 @@ impl PlayerApp {
         frame: &mut eframe::Frame,
         add_contents: impl FnOnce(&mut egui::Ui),
     ) {
-        use egui::*;
-
         let panel_frame = egui::Frame {
             fill: ctx.style().visuals.window_fill(),
             rounding: 10.0.into(),
@@ -231,9 +163,20 @@ impl PlayerApp {
                 rect
             };
 
-            title_bar_ui(ui, frame, &title_bar_rect, self.window_title.as_str());
+            misc::title_bar_ui(ui, frame, &title_bar_rect, self.window_title.as_str());
 
-            self.menu_bar_ui();
+            // Add the contents:
+            let content_rect = {
+                let mut rect = app_rect;
+                rect.min.y = title_bar_rect.max.y;
+                rect.max.y = rect.max.y;
+                rect
+            }
+            .shrink(4.0);
+            let mut content_ui = ui.child_ui(content_rect, *ui.layout());
+            add_contents(&mut content_ui);
+
+            self.menu_bar_ui(ui, frame);
 
             let function_bar_height = 64.0;
             let function_bar_rect = {
@@ -243,22 +186,37 @@ impl PlayerApp {
                 rect
             };
 
-            self.function_bar_ui(ui, frame, &function_bar_rect);
-
-            // Add the contents:
-            let content_rect = {
-                let mut rect = app_rect;
-                rect.min.y = title_bar_rect.max.y;
-                rect.max.y = rect.max.y - function_bar_height;
-                rect
-            }
-            .shrink(4.0);
-            let mut content_ui = ui.child_ui(content_rect, *ui.layout());
-            add_contents(&mut content_ui);
+            self.function_bar_ui(ui, &function_bar_rect);
         });
     }
 
-    fn menu_bar_ui(&mut self) {}
+    fn menu_button_file_ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        ui.menu_button("文件", |ui| {
+            if ui.button("打开").clicked() {
+                if let Some(path) = rfd::FileDialog::new().pick_file() {
+                    self.audio_path = path.display().to_string();
+                }
+            }
+            if ui.button("退出").clicked() {
+                unsafe {
+                    if IDYES
+                        == MessageBoxW(
+                            None,
+                            w!("你真的要退出吗?"),
+                            w!("提示"),
+                            MB_YESNO | MB_ICONASTERISK,
+                        )
+                    {
+                        frame.close()
+                    }
+                }
+            }
+        });
+    }
+
+    fn menu_bar_ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        ui.horizontal(|ui| {});
+    }
 }
 
 impl eframe::App for PlayerApp {
@@ -267,8 +225,9 @@ impl eframe::App for PlayerApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.custom_window_frame(ctx, frame, |ui| {
-            ui.add(&mut widgets::PlayControlSwitch::default());
-        });
+        self.custom_window_frame(ctx, frame, |ui| {});
     }
 }
+
+#[test]
+fn foo() {}

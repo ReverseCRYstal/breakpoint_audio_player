@@ -6,15 +6,8 @@ An app in order to make better listening experience
 
 ## Work in progress...
 
-**Basic audio playback function implementation -- Done!**
+## TODOs
 
+Implementation of the appearance of **function bar**
 
-**Runnable -- Yes!**
-
-****Window's Option designs -- Unfinished...****
-
-**Ui of function bar -- Unfinished...**
-
-**Ui of menu bar -- Unfinished...**
-
-**Custom widgets -- Unfinished...**
+Implementation of the function of **function bar**
