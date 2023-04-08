@@ -2,6 +2,23 @@
 
 use eframe::egui;
 
+pub fn confirm_exit(frame: &mut eframe::Frame) {
+    use windows::{w, Win32::UI::WindowsAndMessaging};
+    use WindowsAndMessaging::{MessageBoxW, IDYES, MB_ICONASTERISK, MB_YESNO};
+    unsafe {
+        if IDYES
+            == MessageBoxW(
+                None,
+                w!("你真的要退出吗?"),
+                w!("提示"),
+                MB_YESNO | MB_ICONASTERISK,
+            )
+        {
+            frame.close()
+        }
+    }
+}
+
 /// From egui
 /// Render 'close', 'maximize' and 'minimize' buttons on the title bar
 fn close_maximize_minimize(ui: &mut egui::Ui, frame: &mut eframe::Frame) {
@@ -13,7 +30,7 @@ fn close_maximize_minimize(ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         .add(Button::new(RichText::new("❌").size(button_height)))
         .on_hover_text("关闭窗口");
     if close_response.clicked() {
-        frame.close();
+        confirm_exit(frame);
     }
 
     if frame.info().window_info.maximized {

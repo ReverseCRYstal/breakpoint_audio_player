@@ -8,21 +8,22 @@ pub fn rounding_button(text: &str, radius: f32) -> egui::Button {
         .rounding(radius / 2.0)
 }
 
-struct RoundingButton {
+pub struct RoundingButton {
     radius: f32,
     text: String,
 }
 
 impl RoundingButton {
-    fn new(radius: f32, text: impl ToString) -> Self {
+    #[allow(dead_code)]
+    pub fn new(radius: f32, text: String) -> Self {
         Self {
             radius: radius,
-            text: text.to_string(),
+            text: text,
         }
     }
 }
 
-impl egui::Widget for &mut RoundingButton {
+impl egui::Widget for RoundingButton {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         // Widget code can be broken up in four steps:
         //  1. Decide a size for the widget
@@ -64,8 +65,12 @@ impl egui::Widget for &mut RoundingButton {
             // This will, for instance, give us different colors when the widget is hovered or clicked.
             let visuals = ui.style().interact(&response);
 
-            painter.circle_filled(rect.center(), self.radius, visuals.bg_fill);
-
+            painter.circle(
+                rect.center(),
+                self.radius,
+                visuals.bg_fill,
+                visuals.fg_stroke,
+            );
             // All coordinates are in absolute screen coordinates so we use `rect` to place the elements.
             // let rect = rect.expand(visuals.expansion);
             // let radius = 0.5 * rect.height();

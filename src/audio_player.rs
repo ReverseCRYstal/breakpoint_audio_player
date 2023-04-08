@@ -19,6 +19,13 @@ impl Default for AudioPlayer {
 }
 
 impl AudioPlayer {
+    pub fn from_path(path: &str) -> Self {
+        let ret = Self {
+            ..Default::default()
+        };
+        ret.play_single_file(path);
+        ret
+    }
     pub fn switch_to(&self, to_on: bool) {
         if to_on {
             self.sink.play()
@@ -28,14 +35,14 @@ impl AudioPlayer {
     }
 
     pub fn switch(&self) {
-        self.switch_to(!self.sink.is_paused())
+        self.switch_to(self.sink.is_paused())
     }
 
     pub fn play_single_file(&self, path: &str) {
         let file = std::io::BufReader::new(std::fs::File::open(path).unwrap());
 
         let source = rodio::Decoder::new(file).unwrap();
-
+        self.sink.pause();
         self.sink.append(source);
     }
 
