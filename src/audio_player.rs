@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+//! abstraction of playback function
 
 use rodio::{OutputStream, Sink};
 
@@ -28,21 +28,25 @@ impl AudioPlayer {
     }
     pub fn switch_to(&self, to_on: bool) {
         if to_on {
-            self.sink.play()
+            self.resume()
         } else {
-            self.sink.pause()
+            self.pause()
         }
     }
 
     pub fn switch(&self) {
-        self.switch_to(self.sink.is_paused())
+        self.switch_to(self.is_paused())
     }
 
     pub fn play_single_file(&self, path: &str) {
         let file = std::io::BufReader::new(std::fs::File::open(path).unwrap());
 
         let source = rodio::Decoder::new(file).unwrap();
-        self.sink.pause();
+        if self.sink.empty(){
+            self.pause();
+        }else {
+            self.sink.clear();
+        }
         self.sink.append(source);
     }
 
@@ -54,7 +58,7 @@ impl AudioPlayer {
         self.sink.pause();
     }
 
-    pub fn set_volumn(&self, value: f32) {
+    pub fn _set_volumn(&self, value: f32) {
         self.sink.set_volume(value);
     }
 
@@ -62,7 +66,7 @@ impl AudioPlayer {
         self.sink.is_paused()
     }
 
-    pub fn sleep_until_end(&self) {
+    pub fn _sleep_until_end(&self) {
         self.sink.sleep_until_end();
     }
 }
@@ -73,5 +77,5 @@ fn play_control_test() {
 
     let player = AudioPlayer::default();
     player.play_single_file(path);
-    player.sleep_until_end();
+    player._sleep_until_end();
 }

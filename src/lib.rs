@@ -11,7 +11,7 @@ use eframe::egui;
 use egui::{vec2, CentralPanel};
 
 // ⏴⏵⏶⏷⏩⏪⏭⏮⏸⏹⏺■▶★☆☐☑↺↻⟲⟳⬅➡⬆⬇⬈⬉⬊⬋⬌⬍⮨⮩⮪⮫⊗✔⛶
-// 🔀🔁🔃🔈🔉🔊📢📣
+// 🔀🔁🔃
 // ☜☝☞☟⛃  ♡
 pub mod emoji_icons {
     /// Next breakpoint
@@ -43,7 +43,7 @@ impl PlayerApp {
         }
     }
 
-    fn play_control_button_ui(&mut self, ui: &mut egui::Ui, bar_rect: &egui::Rect) {
+    fn play_control_button_ui(&mut self, ui: &mut egui::Ui, _bar_rect: &egui::Rect) {
         ui.horizontal(|ui| {
             if ui
                 .add(widgets::rounding_button(emoji_icons::PREV_BRK_PT, 34.0))
@@ -62,6 +62,7 @@ impl PlayerApp {
             {
                 self.player.switch();
             }
+
             if ui
                 .add(widgets::rounding_button(emoji_icons::NEXT_BRK_PT, 34.0))
                 .clicked()
@@ -100,8 +101,6 @@ impl PlayerApp {
         CentralPanel::default().frame(panel_frame).show(ctx, |ui| {
             let app_rect = ui.max_rect();
 
-            dbg!(app_rect);
-
             let title_bar_height = 32.0;
             let title_bar_rect = {
                 let mut rect = app_rect;
@@ -113,9 +112,17 @@ impl PlayerApp {
 
             self.menu_bar_ui(ui, frame);
 
-            let app_rect = ui.max_rect();
+            let function_bar_height = 64.0;
+            let function_bar_rect = {
+                let mut rect = app_rect;
+                rect.max.y = rect.max.y - function_bar_height;
+                rect.min.y = rect.max.y;
+                rect
+            };
 
-            dbg!(app_rect);
+            self.function_bar_ui(ui, &function_bar_rect);
+
+            let app_rect = ui.min_rect();
 
             // Add the contents:
             let content_rect = {
@@ -127,16 +134,6 @@ impl PlayerApp {
             .shrink(4.0);
             let mut content_ui = ui.child_ui(content_rect, *ui.layout());
             add_contents(&mut content_ui);
-
-            let function_bar_height = 64.0;
-            let function_bar_rect = {
-                let mut rect = app_rect;
-                rect.max.y = rect.max.y - function_bar_height;
-                rect.min.y = rect.max.y;
-                rect
-            };
-
-            self.function_bar_ui(ui, &function_bar_rect);
         });
     }
 
@@ -144,8 +141,10 @@ impl PlayerApp {
         ui.menu_button("文件", |ui| {
             if ui.button("打开").clicked() {
                 if let Some(path) = rfd::FileDialog::new().pick_file() {
-                    let audio_path = path.display().to_string();
-                    self.player.play_single_file(audio_path.as_str());
+                    self.player
+                        .play_single_file(path.display().to_string().as_str());
+                    
+                    ui.close_menu();
                 }
             }
             if ui.button("退出").clicked() {
@@ -153,6 +152,8 @@ impl PlayerApp {
             }
         });
     }
+
+    // fn appearence_ui(&mut self){}
 
     fn menu_bar_ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         ui.horizontal(|ui| {
@@ -167,8 +168,12 @@ impl eframe::App for PlayerApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        #[allow(unused_variables)]
-        self.content(ctx, frame, |ui| {});
+        // #[allow(unused_variables)]
+        self.content(ctx, frame, |_ui| {
+            // ui.add(egui::Label::new(emoji_icons::FULL_VOLUME));
+            // ui.label(emoji_icons::NORMAL_VOLUME);
+            // ui.label(emoji_icons::NO_VOLUME);
+        });
     }
 }
 
