@@ -1,13 +1,19 @@
-# breakpoint_audio_player
+# Language selection
 
-An app in order to make better listening experience
+[English Translation](.\README.en_us.md)
 
-# Progress
+# 断点音频播放器
 
-## Work in progress...
+旨在提供更好的听力体验
+
+# 仍在开发阶段……
 
 ## TODOs
 
-Implementation of the appearance of **function bar**
+功能栏功能的实现
 
-Implementation of the function of **function bar**
+功能栏外观的实现
+
+完整的菜单栏实现
+
+UI布局
