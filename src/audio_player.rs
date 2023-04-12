@@ -1,5 +1,7 @@
 //! abstraction of playback function
 
+use std::path::Path;
+
 use rodio::{OutputStream, Sink};
 
 pub struct AudioPlayer {
@@ -19,13 +21,16 @@ impl Default for AudioPlayer {
 }
 
 impl AudioPlayer {
-    pub fn from_path(path: &str) -> Self {
+    pub fn from_path(path: &Path) -> Self {
         let ret = Self {
             ..Default::default()
         };
+
         ret.play_single_file(path);
+
         ret
     }
+
     pub fn switch_to(&self, to_on: bool) {
         if to_on {
             self.resume()
@@ -38,16 +43,19 @@ impl AudioPlayer {
         self.switch_to(self.is_paused())
     }
 
-    pub fn play_single_file(&self, path: &str) {
-        let file = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-
-        let source = rodio::Decoder::new(file).unwrap();
-        if self.sink.empty(){
+    pub fn play_single_file(&self, path: &Path) {
+        if self.sink.empty() {
             self.pause();
-        }else {
+        } else {
             self.sink.clear();
         }
-        self.sink.append(source);
+
+        if !path.to_str().unwrap().is_empty() {
+            let file = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+
+            let source = rodio::Decoder::new(file).unwrap();
+            self.sink.append(source);
+        }
     }
 
     pub fn resume(&self) {
@@ -76,6 +84,6 @@ fn play_control_test() {
     let path = ".\\assests\\example_audio.mp3";
 
     let player = AudioPlayer::default();
-    player.play_single_file(path);
+    player.play_single_file(Path::new(path));
     player._sleep_until_end();
 }

@@ -1,12 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::path::{Path, PathBuf};
+
 use breakpoint_audio_player::*;
 
 fn main() -> Result<(), eframe::Error> {
+    let argv: Vec<String> = std::env::args().collect();
+    let path = if argv.len() >= 2 {
+        PathBuf::from(argv[1].as_str())
+    } else {
+        PathBuf::new()
+    };
+
     let result = eframe::run_native(
         WINDOW_TITLE,
         get_window_option(),
-        Box::new(|cc| Box::new(PlayerApp::new(cc, ".\\assests\\example_audio.mp3".into()))),
+        Box::new(|cc| Box::new(PlayerApp::new(cc, path.into()))),
     );
 
     // if result.is_err() {

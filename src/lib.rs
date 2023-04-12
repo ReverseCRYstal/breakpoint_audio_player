@@ -5,6 +5,8 @@ mod audio_player;
 mod misc;
 mod widgets;
 
+use std::path::PathBuf;
+
 use audio_player::AudioPlayer;
 
 use eframe::egui;
@@ -34,15 +36,22 @@ pub struct PlayerApp {
 }
 
 impl PlayerApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, file_path: String) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, file_path: PathBuf) -> Self {
         misc::setup_font(&cc.egui_ctx);
 
-        PlayerApp {
+        // let appended_string = file_path.to_str().unwrap().to_string();
+
+        // if !appended_string.is_empty() {
+        //     appended_string = String::from(" - ") + appended_string;
+        // }
+
+        Self {
             player: AudioPlayer::from_path(&file_path),
             window_title: WINDOW_TITLE.to_string(),
         }
     }
 
+    #[inline(always)]
     fn play_control_button_ui(&mut self, ui: &mut egui::Ui, _bar_rect: &egui::Rect) {
         ui.horizontal(|ui| {
             if ui
@@ -50,7 +59,7 @@ impl PlayerApp {
                 .clicked()
             {}
 
-            let play_control_icon = if self.player.is_paused() {
+            let play_control_icon = if dbg!(self.player.is_paused()) {
                 emoji_icons::RESUME
             } else {
                 emoji_icons::PAUSE
@@ -70,6 +79,7 @@ impl PlayerApp {
         });
     }
 
+    #[inline(always)]
     fn function_bar_ui(&mut self, ui: &mut egui::Ui, function_bar_rect: &egui::Rect) {
         let painter = ui.painter();
 
@@ -141,9 +151,8 @@ impl PlayerApp {
         ui.menu_button("文件", |ui| {
             if ui.button("打开").clicked() {
                 if let Some(path) = rfd::FileDialog::new().pick_file() {
-                    self.player
-                        .play_single_file(path.display().to_string().as_str());
-                    
+                    self.player.play_single_file(&path);
+
                     ui.close_menu();
                 }
             }
