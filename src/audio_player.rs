@@ -1,6 +1,6 @@
 //! abstraction of playback function
 
-use rodio::{OutputStream, Sink, Source};
+use rodio::{OutputStream, Sink};
 use std::path::Path;
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ impl Default for SingletonPlayer {
             _stream: stream,
             sink: Sink::try_new(&stream_handle).unwrap(),
             progress: 0,
-            total_duration: Duration::from_millis(0),
+            total_duration: Duration::default(),
         }
     }
 }
@@ -51,15 +51,20 @@ impl SingletonPlayer {
     pub fn switch(&self) {
         self.switch_to(self.is_paused())
     }
-    pub fn get_total_duration(&self) -> Duration{
+    pub fn get_total_duration(&self) -> Duration {
         self.total_duration
     }
     pub fn get_progress(&self) -> u64 {
+        u64::default()
+        // unimplemented!()
+    }
+
+    pub fn set_progress(&self, value: u64) {
         unimplemented!()
     }
 
-    pub fn set_progress(&self) -> u64 {
-        unimplemented!()
+    pub fn set_speed(&self, value: f32) {
+        self.sink.set_speed(value);
     }
 
     pub fn play_once(&mut self, path: &Path) -> Result<(), &str> {
@@ -76,8 +81,9 @@ impl SingletonPlayer {
 
             match rodio::Decoder::new(file) {
                 Ok(source) => {
-                    let buf = source.convert_samples::<f32>().buffered();
-                    
+                    self.sink.append(source);
+                    self.total_duration = mp3_duration::from_path(&path).unwrap();
+
                     Ok(())
                 }
                 Err(error) => match error {
@@ -130,15 +136,7 @@ impl SingletonPlayer {
 
 #[cfg(test)]
 mod tests {
-    use rodio::Source;
+    use std::time::Duration;
 
-    #[test]
-    fn total_duration() {
-        let path = "D:\\Sources\\rust\\breakpoint_audio_player\\assests\\example_audio.mp3";
-        let file = std::io::BufReader::new(std::fs::File::open(path).unwrap());
-        let decoder = rodio::Decoder::new(file).unwrap();
-        
-        let a = decoder.count() * 5;
-        println!("{}:{}",a / 1000 / 60, a / 1000 % 60);
-    }
+    use rodio::Source;
 }

@@ -3,10 +3,9 @@
 
 mod audio_player;
 mod misc;
-mod my_sink;
 mod widgets;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use audio_player::SingletonPlayer;
 
@@ -37,9 +36,16 @@ pub struct PlayerApp {
     show_volume_slider: bool,
     volume: u8,
     progress: u64,
+    speed_enum_index: usize,
 }
 
 impl PlayerApp {
+    const SPEED_ENUMERATION: [&str; 5] = ["0.5×", "0.75×", "1.0×", "1.25×", "1.5×"];
+
+    fn speed_text(&self) -> &'static str {
+        Self::SPEED_ENUMERATION[self.speed_enum_index]
+    }
+
     pub fn new(cc: &eframe::CreationContext<'_>, file_path: PathBuf) -> Self {
         misc::setup_font(&cc.egui_ctx);
 
@@ -56,22 +62,31 @@ impl PlayerApp {
             volume: 100,
             progress: u64::default(),
             show_volume_slider: bool::default(),
+            speed_enum_index: 2,
         }
     }
 
     #[inline(always)]
     fn play_control_button_ui(&mut self, ui: &mut egui::Ui, _bar_rect: &egui::Rect) {
-        ui.add(egui::Slider::new(
-            &mut self.progress,
-            0..=self.player.get_progress(),
-        ));
         ui.horizontal(|ui| {
+            ui.menu_button(self.speed_text(), |ui| {
+                let mut index = 0;
+                for text in Self::SPEED_ENUMERATION {
+                    if ui.button(text).clicked() {
+                        self.speed_enum_index = index;
+                        self.player.set_speed(0.5 + index as f32 * 0.25);
+                        break;
+                    }
+                    index += 1;
+                }
+            });
+
             if ui
                 .add(widgets::rounding_button(emoji_icons::PREV_BRK_PT, 34.0))
                 .clicked()
             {}
 
-            let play_control_icon = if dbg!(self.player.is_paused()) {
+            let play_control_icon = if self.player.is_paused() {
                 emoji_icons::RESUME
             } else {
                 emoji_icons::PAUSE
@@ -90,11 +105,13 @@ impl PlayerApp {
                 .add(widgets::rounding_button(emoji_icons::NEXT_BRK_PT, 34.0))
                 .clicked()
             {}
+
             let volume_icon = match self.volume {
                 0 => emoji_icons::NO_VOLUME,
-                100 => emoji_icons::FULL_VOLUME,
+                75.. => emoji_icons::FULL_VOLUME,
                 _ => emoji_icons::NORMAL_VOLUME,
             };
+
             ui.vertical(|ui| {
                 if ui
                     .button(RichText::new(volume_icon).size(15.0))
@@ -104,11 +121,35 @@ impl PlayerApp {
                     self.show_volume_slider = !self.show_volume_slider;
                 }
 
+                let volume = self.volume;
+
                 if self.show_volume_slider {
-                    ui.add(egui::Slider::new(&mut self.volume, 0..=100).vertical());
+                    ui.add(
+                        egui::Slider::new(&mut self.volume, 0..=100)
+                            .show_value(false)
+                            .text(volume.to_string())
+                            .vertical(),
+                    );
                 }
+
+                self.player.set_volume(volume as f32);
             });
         });
+
+        if self.player.get_total_duration() != Duration::default() {
+            if ui
+                .add(
+                    egui::Slider::new(
+                        &mut self.progress,
+                        0..=self.player.get_total_duration().as_secs(),
+                    )
+                    .show_value(true),
+                )
+                .drag_released()
+            {
+                // self.player.set_progress(self.progress);
+            }
+        }
     }
 
     #[inline(always)]
@@ -189,7 +230,7 @@ impl PlayerApp {
             if ui.button("打开").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .set_title("打开音频文件")
-                    .add_filter("音频文件", &[".wav", ".mp3"])
+                    .add_filter("音频文件", &["wav", "mp3"])
                     .pick_file()
                 {
                     let error_msg = self.player.play_once(&path);
