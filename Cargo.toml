@@ -8,7 +8,6 @@ author = "ReverseCRYstal"
 
 [dependencies]
 eframe = "0.21.3"
-rodio = "0.17.1"
 rfd = "0.11.3"
 
 [dependencies.windows]
@@ -17,3 +16,13 @@ features = [
     "Win32_UI_WindowsAndMessaging", 
     "Win32_Foundation"
 ]
+
+[dependencies.rodio]
+version = "0.17.1"
+features = [
+    "minimp3"
+]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1

@@ -1,10 +1,15 @@
-// ! setups that are usually called before create the window
+//! The functions implemented in this file are generally not called many times
 
 use eframe::egui;
 
+use windows::{w, Win32::UI::WindowsAndMessaging};
+
+use WindowsAndMessaging::MessageBoxW;
+use WindowsAndMessaging::IDYES;
+use WindowsAndMessaging::{MB_ICONASTERISK, MB_YESNO};
+
+#[inline(always)]
 pub fn confirm_exit(frame: &mut eframe::Frame) {
-    use windows::{w, Win32::UI::WindowsAndMessaging};
-    use WindowsAndMessaging::{MessageBoxW, IDYES, MB_ICONASTERISK, MB_YESNO};
     unsafe {
         if IDYES
             == MessageBoxW(
@@ -21,6 +26,7 @@ pub fn confirm_exit(frame: &mut eframe::Frame) {
 
 /// From egui
 /// Render 'close', 'maximize' and 'minimize' buttons on the title bar
+#[inline(always)]
 fn close_maximize_minimize(ui: &mut egui::Ui, frame: &mut eframe::Frame) {
     use egui::{Button, RichText};
 
@@ -59,6 +65,7 @@ fn close_maximize_minimize(ui: &mut egui::Ui, frame: &mut eframe::Frame) {
 
 /// From egui
 /// Render title bar
+#[inline(always)]
 pub fn title_bar_ui(
     ui: &mut egui::Ui,
     frame: &mut eframe::Frame,
@@ -106,6 +113,7 @@ pub fn title_bar_ui(
     });
 }
 
+#[inline(always)]
 pub fn setup_font(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 

@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use breakpoint_audio_player::*;
 
@@ -13,14 +13,11 @@ fn main() -> Result<(), eframe::Error> {
     };
 
     let result = eframe::run_native(
-        WINDOW_TITLE,
+        DEFAULT_WINDOW_TITLE,
         get_window_option(),
-        Box::new(|cc| Box::new(PlayerApp::new(cc, path.into()))),
+        Box::new(|cc| Box::new(PlayerApp::new(cc, path))),
     );
 
-    // if result.is_err() {
-    //     println!("{}", result.unwrap_err());
-    // }
     result
 }
 

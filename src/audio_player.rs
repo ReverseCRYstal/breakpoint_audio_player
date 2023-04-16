@@ -1,36 +1,44 @@
 //! abstraction of playback function
 
+use rodio::{OutputStream, Sink, Source};
 use std::path::Path;
+use std::time::Duration;
 
-use rodio::{OutputStream, Sink};
-
-pub struct AudioPlayer {
+/// Play an audio with a `Sink`
+/// Only one audio can be played and controlled in the playback queue
+pub struct SingletonPlayer {
     sink: Sink,
     _stream: OutputStream,
+    total_duration: Duration,
+    progress: u64,
 }
 
-impl Default for AudioPlayer {
+impl Default for SingletonPlayer {
     fn default() -> Self {
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
 
         Self {
             _stream: stream,
             sink: Sink::try_new(&stream_handle).unwrap(),
+            progress: 0,
+            total_duration: Duration::from_millis(0),
         }
     }
 }
 
-impl AudioPlayer {
-    pub fn from_path(path: &Path) -> Self {
-        let ret = Self {
+impl SingletonPlayer {
+    pub fn try_new(path: &Path) -> Result<Self, String> {
+        let mut ret = Self {
             ..Default::default()
         };
-
-        ret.play_single_file(path);
-
-        ret
+        if let Err(result) = ret.play_once(path) {
+            Err(result.to_string())
+        } else {
+            Ok(ret)
+        }
     }
 
+    #[inline]
     pub fn switch_to(&self, to_on: bool) {
         if to_on {
             self.resume()
@@ -39,11 +47,24 @@ impl AudioPlayer {
         }
     }
 
+    #[inline]
     pub fn switch(&self) {
         self.switch_to(self.is_paused())
     }
+    pub fn get_total_duration(&self) -> Duration{
+        self.total_duration
+    }
+    pub fn get_progress(&self) -> u64 {
+        unimplemented!()
+    }
 
-    pub fn play_single_file(&self, path: &Path) {
+    pub fn set_progress(&self) -> u64 {
+        unimplemented!()
+    }
+
+    pub fn play_once(&mut self, path: &Path) -> Result<(), &str> {
+        use rodio::decoder::DecoderError::*;
+
         if self.sink.empty() {
             self.pause();
         } else {
@@ -53,37 +74,71 @@ impl AudioPlayer {
         if !path.to_str().unwrap().is_empty() {
             let file = std::io::BufReader::new(std::fs::File::open(path).unwrap());
 
-            let source = rodio::Decoder::new(file).unwrap();
-            self.sink.append(source);
+            match rodio::Decoder::new(file) {
+                Ok(source) => {
+                    let buf = source.convert_samples::<f32>().buffered();
+                    
+                    Ok(())
+                }
+                Err(error) => match error {
+                    UnrecognizedFormat => Err("加载了尚未识别数据的格式。"),
+                    IoError(_) => Err("读取、写入或查找流时发生IO错误。"),
+                    DecodeError(_) => Err("流包含格式错误的数据，无法解码或解复用。"),
+                    LimitError(_) => Err("对流进行解码或解复用时达到了默认或用户定义的限制。限制用于防止来自恶意流的拒绝服务攻击。"),
+                    ResetRequired => Err("在继续之前，需要重置解复用器或解码器。"),
+                    NoStreams => Err("解码器未找到任何流"),
+                }
+            }
+        } else {
+            Ok(())
         }
     }
 
+    #[inline]
     pub fn resume(&self) {
         self.sink.play()
     }
 
+    #[inline]
     pub fn pause(&self) {
         self.sink.pause();
     }
 
-    pub fn _set_volumn(&self, value: f32) {
-        self.sink.set_volume(value);
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.sink.empty()
     }
 
+    /// Sets volume by percentage. \
+    /// The value `100.0` is the 'normal' volume.\
+    /// See `Sink::set_volume for details.
+    #[inline]
+    pub fn set_volume(&self, value: f32) {
+        self.sink.set_volume(value / 100.0);
+    }
+
+    #[inline]
     pub fn is_paused(&self) -> bool {
         self.sink.is_paused()
     }
 
+    #[inline]
     pub fn _sleep_until_end(&self) {
         self.sink.sleep_until_end();
     }
 }
 
-#[test]
-fn play_control_test() {
-    let path = ".\\assests\\example_audio.mp3";
+#[cfg(test)]
+mod tests {
+    use rodio::Source;
 
-    let player = AudioPlayer::default();
-    player.play_single_file(Path::new(path));
-    player._sleep_until_end();
+    #[test]
+    fn total_duration() {
+        let path = "D:\\Sources\\rust\\breakpoint_audio_player\\assests\\example_audio.mp3";
+        let file = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+        let decoder = rodio::Decoder::new(file).unwrap();
+        
+        let a = decoder.count() * 5;
+        println!("{}:{}",a / 1000 / 60, a / 1000 % 60);
+    }
 }
