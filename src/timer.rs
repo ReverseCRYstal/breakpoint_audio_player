@@ -20,11 +20,52 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use eframe::egui;
+use std::time::{Duration, Instant};
 
-#[inline]
-pub fn rounding_button(text: impl Into<egui::WidgetText>, radius: f32) -> egui::Button {
-    egui::Button::new(text)
-        .min_size(egui::Vec2::splat(radius))
-        .rounding(radius / 2.0)
+/// A simple timer designed for playback record
+pub struct Timer{
+    total_time: Duration,
+    updater: Option<Instant>,
+}
+
+impl Default for Timer {
+    fn default() -> Self {
+        Self { total_time: Duration::default(), updater: None}
+    }
+}
+
+impl Timer{
+    pub fn pause(&mut self){
+        if self.updater.is_none() { return; }
+
+            self.total_time += self.updater.unwrap().elapsed();
+            self.updater = None;
+        
+    }
+
+    pub fn start(&mut self) {
+        if self.updater.is_none() {
+            self.updater = Some(Instant::now());
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.pause();
+        self.updater = None;
+        self.total_time = Duration::default();
+    }
+
+    pub fn read(&self) -> Duration {
+        if self.updater.is_none() {
+            self.total_time
+        } else {
+            self.total_time + self.updater.unwrap().elapsed()
+        }
+    }
+
+    pub fn write(&mut self, dur: Duration) {
+        self.updater = None;
+        self.total_time = dur;
+    }
+
 }

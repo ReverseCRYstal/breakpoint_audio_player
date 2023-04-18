@@ -1,8 +1,32 @@
+// MIT License
+//
+// Copyright (c) 2023 CrYStaL
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 //! abstraction of playback function
 
 use rodio::{OutputStream, Sink};
 use std::path::Path;
 use std::time::Duration;
+
+use crate::timer::Timer;
 
 /// Play an audio with a `Sink`
 /// Only one audio can be played and controlled in the playback queue
@@ -10,7 +34,8 @@ pub struct SingletonPlayer {
     sink: Sink,
     _stream: OutputStream,
     total_duration: Duration,
-    progress: u64,
+    timer: Timer,
+    //progress: u64,
 }
 
 impl Default for SingletonPlayer {
@@ -20,8 +45,9 @@ impl Default for SingletonPlayer {
         Self {
             _stream: stream,
             sink: Sink::try_new(&stream_handle).unwrap(),
-            progress: 0,
+            //progress: u64::default(),
             total_duration: Duration::default(),
+            timer: Timer::default(),
         }
     }
 }
@@ -31,6 +57,7 @@ impl SingletonPlayer {
         let mut ret = Self {
             ..Default::default()
         };
+        
         if let Err(result) = ret.play_once(path) {
             Err(result.to_string())
         } else {
@@ -39,7 +66,7 @@ impl SingletonPlayer {
     }
 
     #[inline]
-    pub fn switch_to(&self, to_on: bool) {
+    pub fn switch_to_status(&mut self, to_on: bool) {
         if to_on {
             self.resume()
         } else {
@@ -48,19 +75,25 @@ impl SingletonPlayer {
     }
 
     #[inline]
-    pub fn switch(&self) {
-        self.switch_to(self.is_paused())
+    pub fn switch_playback_status(&mut self) {
+        self.switch_to_status(self.is_paused())
     }
+
+    #[inline]
     pub fn get_total_duration(&self) -> Duration {
         self.total_duration
     }
-    pub fn get_progress(&self) -> u64 {
-        u64::default()
-        // unimplemented!()
+
+    pub fn get_progress(&mut self) -> u64 {
+        //self.progress = self.timer.read().as_secs();
+        //self.progress
+        self.timer.read().as_secs()
     }
 
-    pub fn set_progress(&self, value: u64) {
-        unimplemented!()
+    pub fn set_progress(&mut self, value: u64) {
+        // self.progress = value;
+        self.timer.write(Duration::from_secs(value));
+        unimplemented!("Actually controls playback.");
     }
 
     pub fn set_speed(&self, value: f32) {
@@ -83,6 +116,7 @@ impl SingletonPlayer {
                 Ok(source) => {
                     self.sink.append(source);
                     self.total_duration = mp3_duration::from_path(&path).unwrap();
+                    self.timer.clear();
 
                     Ok(())
                 }
@@ -101,12 +135,14 @@ impl SingletonPlayer {
     }
 
     #[inline]
-    pub fn resume(&self) {
-        self.sink.play()
+    pub fn resume(&mut self) {
+        self.timer.start();
+        self.sink.play();
     }
 
     #[inline]
-    pub fn pause(&self) {
+    pub fn pause(&mut self) {
+        self.timer.pause();
         self.sink.pause();
     }
 
@@ -135,8 +171,4 @@ impl SingletonPlayer {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use rodio::Source;
-}
+mod tests {}

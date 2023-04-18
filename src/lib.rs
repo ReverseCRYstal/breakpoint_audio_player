@@ -1,9 +1,29 @@
-// #![allow(dead_code)]
-// #![allow(unused)]
+// MIT License
+//
+// Copyright (c) 2023 CrYStaL
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
+mod timer;
 mod audio_player;
-mod misc;
 mod widgets;
+mod misc;
 
 use std::{path::PathBuf, time::Duration};
 
@@ -35,7 +55,7 @@ pub struct PlayerApp {
     player: SingletonPlayer,
     show_volume_slider: bool,
     volume: u8,
-    progress: u64,
+    progress_buffer: u64,
     speed_enum_index: usize,
 }
 
@@ -60,7 +80,7 @@ impl PlayerApp {
             player: SingletonPlayer::try_new(&file_path).unwrap(),
             window_title: DEFAULT_WINDOW_TITLE.to_string(),
             volume: 100,
-            progress: u64::default(),
+            progress_buffer: u64::default(),
             show_volume_slider: bool::default(),
             speed_enum_index: 2,
         }
@@ -75,14 +95,20 @@ impl PlayerApp {
                     if ui.button(text).clicked() {
                         self.speed_enum_index = index;
                         self.player.set_speed(0.5 + index as f32 * 0.25);
+                        ui.close_menu();
                         break;
                     }
                     index += 1;
                 }
             });
 
+            let button_radius = 35.0;
+
             if ui
-                .add(widgets::rounding_button(emoji_icons::PREV_BRK_PT, 34.0))
+                .add(widgets::rounding_button(
+                    RichText::new(emoji_icons::PREV_BRK_PT).size(button_radius / 2.0),
+                    button_radius,
+                ))
                 .clicked()
             {}
 
@@ -93,16 +119,22 @@ impl PlayerApp {
             };
 
             if ui
-                .add(widgets::rounding_button(play_control_icon, 38.0))
+                .add(widgets::rounding_button(
+                    RichText::new(play_control_icon).size((button_radius + 5.0)/ 1.5),
+                    button_radius + 5.0,
+                ))
                 .clicked()
             {
                 if !self.player.is_empty() {
-                    self.player.switch();
+                    self.player.switch_playback_status();
                 }
             }
 
             if ui
-                .add(widgets::rounding_button(emoji_icons::NEXT_BRK_PT, 34.0))
+                .add(widgets::rounding_button(
+                    RichText::new(emoji_icons::NEXT_BRK_PT).size(button_radius / 2.0),
+                    button_radius,
+                ))
                 .clicked()
             {}
 
@@ -114,7 +146,7 @@ impl PlayerApp {
 
             ui.vertical(|ui| {
                 if ui
-                    .button(RichText::new(volume_icon).size(15.0))
+                    .add(egui::Button::new(RichText::new(volume_icon).size(15.0)).frame(false))
                     .on_hover_text("音量")
                     .clicked()
                 {
@@ -137,17 +169,20 @@ impl PlayerApp {
         });
 
         if self.player.get_total_duration() != Duration::default() {
+            let progress_in_secs = self.player.get_progress();
+
             if ui
                 .add(
                     egui::Slider::new(
-                        &mut self.progress,
+                        &mut self.progress_buffer,
                         0..=self.player.get_total_duration().as_secs(),
                     )
-                    .show_value(true),
+                    .show_value(false)
+                    .text(format!("{}:{}", progress_in_secs / 60, progress_in_secs % 60))
                 )
                 .drag_released()
             {
-                // self.player.set_progress(self.progress);
+                self.player.set_progress(self.progress_buffer);
             }
         }
     }
