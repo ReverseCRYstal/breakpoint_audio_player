@@ -20,10 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-mod timer;
 mod audio_player;
-mod widgets;
 mod misc;
+mod timer;
+mod widgets;
 
 use std::{path::PathBuf, time::Duration};
 
@@ -120,7 +120,7 @@ impl PlayerApp {
 
             if ui
                 .add(widgets::rounding_button(
-                    RichText::new(play_control_icon).size((button_radius + 5.0)/ 1.5),
+                    RichText::new(play_control_icon).size((button_radius + 5.0) / 1.5),
                     button_radius + 5.0,
                 ))
                 .clicked()
@@ -178,7 +178,11 @@ impl PlayerApp {
                         0..=self.player.get_total_duration().as_secs(),
                     )
                     .show_value(false)
-                    .text(format!("{}:{}", progress_in_secs / 60, progress_in_secs % 60))
+                    .text(format!(
+                        "{}:{}",
+                        progress_in_secs / 60,
+                        progress_in_secs % 60
+                    )),
                 )
                 .drag_released()
             {

@@ -23,24 +23,28 @@
 use std::time::{Duration, Instant};
 
 /// A simple timer designed for playback record
-pub struct Timer{
+pub struct Timer {
     total_time: Duration,
     updater: Option<Instant>,
 }
 
 impl Default for Timer {
     fn default() -> Self {
-        Self { total_time: Duration::default(), updater: None}
+        Self {
+            total_time: Duration::default(),
+            updater: None,
+        }
     }
 }
 
-impl Timer{
-    pub fn pause(&mut self){
-        if self.updater.is_none() { return; }
+impl Timer {
+    pub fn pause(&mut self) {
+        if self.updater.is_none() {
+            return;
+        }
 
-            self.total_time += self.updater.unwrap().elapsed();
-            self.updater = None;
-        
+        self.total_time += self.updater.unwrap().elapsed();
+        self.updater = None;
     }
 
     pub fn start(&mut self) {
@@ -67,5 +71,4 @@ impl Timer{
         self.updater = None;
         self.total_time = dur;
     }
-
 }

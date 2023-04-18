@@ -57,7 +57,7 @@ impl SingletonPlayer {
         let mut ret = Self {
             ..Default::default()
         };
-        
+
         if let Err(result) = ret.play_once(path) {
             Err(result.to_string())
         } else {
