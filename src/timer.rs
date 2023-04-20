@@ -67,8 +67,8 @@ impl Timer {
         }
     }
 
-    pub fn write(&mut self, dur: Duration) {
-        self.updater = None;
+    pub fn overwrite(&mut self, dur: Duration) {
+        self.updater = Some(Instant::now());
         self.total_time = dur;
     }
 }

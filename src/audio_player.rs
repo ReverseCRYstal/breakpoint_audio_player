@@ -92,7 +92,7 @@ impl SingletonPlayer {
 
     pub fn set_progress(&mut self, value: u64) {
         // self.progress = value;
-        self.timer.write(Duration::from_secs(value));
+        self.timer.overwrite(Duration::from_secs(value));
         unimplemented!("Actually controls playback.");
     }
 
@@ -164,11 +164,4 @@ impl SingletonPlayer {
         self.sink.is_paused()
     }
 
-    #[inline]
-    pub fn _sleep_until_end(&self) {
-        self.sink.sleep_until_end();
-    }
 }
-
-#[cfg(test)]
-mod tests {}

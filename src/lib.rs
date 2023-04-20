@@ -25,7 +25,7 @@ mod misc;
 mod timer;
 mod widgets;
 
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf};
 
 use audio_player::SingletonPlayer;
 
@@ -87,6 +87,81 @@ impl PlayerApp {
     }
 
     #[inline(always)]
+    fn volume_control(&mut self, ui: &mut egui::Ui) {
+        let volume_icon = match self.volume {
+            0 => emoji_icons::NO_VOLUME,
+            75.. => emoji_icons::FULL_VOLUME,
+            _ => emoji_icons::NORMAL_VOLUME,
+        };
+
+        ui.vertical(|ui| {
+            if ui
+                .add(egui::Button::new(RichText::new(volume_icon).size(15.0)).frame(false))
+                .on_hover_text("音量")
+                .clicked()
+            {
+                self.show_volume_slider = !self.show_volume_slider;
+            }
+
+            let volume = self.volume;
+
+            if self.show_volume_slider {
+                ui.add(
+                    egui::Slider::new(&mut self.volume, 0..=100)
+                        .show_value(false)
+                        .text(volume.to_string())
+                        .vertical(),
+                );
+            }
+
+            self.player.set_volume(volume as f32);
+        });
+    }
+    
+    #[inline(always)]
+    fn playback_switch_control(&mut self,ui: &mut egui::Ui) {
+        let button_radius = 35.0;
+
+        if ui
+            .add(widgets::rounding_button(
+                RichText::new(emoji_icons::PREV_BRK_PT).size(button_radius / 2.0),
+                button_radius,
+            ))
+            .clicked()
+        {
+            unimplemented!();
+        }
+
+        let (play_control_icon, play_control_size) = if self.player.is_paused() {
+            (emoji_icons::RESUME, button_radius + 5.0)
+        } else {
+            (emoji_icons::PAUSE, button_radius)
+        };
+
+        if ui
+            .add(widgets::rounding_button(
+                RichText::new(play_control_icon).size((play_control_size + 5.0) / 1.5),
+                button_radius + 5.0,
+            ))
+            .clicked()
+        {
+            if !self.player.is_empty() {
+                self.player.switch_playback_status();
+            }
+        }
+
+        if ui
+            .add(widgets::rounding_button(
+                RichText::new(emoji_icons::NEXT_BRK_PT).size(button_radius / 2.0),
+                button_radius,
+            ))
+            .clicked()
+        {
+            unimplemented!();
+        }
+    }
+
+    #[inline(always)]
     fn play_control_button_ui(&mut self, ui: &mut egui::Ui, _bar_rect: &egui::Rect) {
         ui.horizontal(|ui| {
             ui.menu_button(self.speed_text(), |ui| {
@@ -102,74 +177,17 @@ impl PlayerApp {
                 }
             });
 
-            let button_radius = 35.0;
-
-            if ui
-                .add(widgets::rounding_button(
-                    RichText::new(emoji_icons::PREV_BRK_PT).size(button_radius / 2.0),
-                    button_radius,
-                ))
-                .clicked()
-            {}
-
-            let play_control_icon = if self.player.is_paused() {
-                emoji_icons::RESUME
-            } else {
-                emoji_icons::PAUSE
-            };
-
-            if ui
-                .add(widgets::rounding_button(
-                    RichText::new(play_control_icon).size((button_radius + 5.0) / 1.5),
-                    button_radius + 5.0,
-                ))
-                .clicked()
-            {
-                if !self.player.is_empty() {
-                    self.player.switch_playback_status();
-                }
-            }
-
-            if ui
-                .add(widgets::rounding_button(
-                    RichText::new(emoji_icons::NEXT_BRK_PT).size(button_radius / 2.0),
-                    button_radius,
-                ))
-                .clicked()
-            {}
-
-            let volume_icon = match self.volume {
-                0 => emoji_icons::NO_VOLUME,
-                75.. => emoji_icons::FULL_VOLUME,
-                _ => emoji_icons::NORMAL_VOLUME,
-            };
-
-            ui.vertical(|ui| {
-                if ui
-                    .add(egui::Button::new(RichText::new(volume_icon).size(15.0)).frame(false))
-                    .on_hover_text("音量")
-                    .clicked()
-                {
-                    self.show_volume_slider = !self.show_volume_slider;
-                }
-
-                let volume = self.volume;
-
-                if self.show_volume_slider {
-                    ui.add(
-                        egui::Slider::new(&mut self.volume, 0..=100)
-                            .show_value(false)
-                            .text(volume.to_string())
-                            .vertical(),
-                    );
-                }
-
-                self.player.set_volume(volume as f32);
-            });
+            self.playback_switch_control(ui);
+            self.volume_control(ui);
         });
 
-        if self.player.get_total_duration() != Duration::default() {
+        // playback progress
+        if !self.player.is_empty() {
             let progress_in_secs = self.player.get_progress();
+
+            if progress_in_secs > self.progress_buffer{
+                self.progress_buffer = progress_in_secs;
+            }
 
             if ui
                 .add(
@@ -206,6 +224,55 @@ impl PlayerApp {
         self.play_control_button_ui(ui, function_bar_rect);
     }
 
+    #[inline(always)]
+    fn menu_button_file_ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        use windows::{w, Win32::UI::WindowsAndMessaging};
+
+        use windows::core::PCWSTR;
+        use WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+
+        ui.menu_button("文件", |ui| {
+            if ui.button("打开").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_title("打开音频文件")
+                    .add_filter("音频文件", &["wav", "mp3"])
+                    .pick_file()
+                {
+                    let error_msg = self.player.play_once(&path);
+                    if error_msg.is_err() {
+                        unsafe {
+                            MessageBoxW(
+                                None,
+                                PCWSTR::from_raw(
+                                    error_msg.unwrap_err_unchecked().as_ptr() as *const u16
+                                ),
+                                w!("错误"),
+                                MB_OK | MB_ICONERROR,
+                            );
+                        }
+                    }else{
+                        self.progress_buffer = Default::default();
+                    }
+                    
+                    ui.close_menu();
+                }
+            }
+            if ui.button("退出").clicked() {
+                misc::confirm_exit(frame);
+            }
+        });
+    }
+
+    // fn appearence_ui(&mut self){}
+
+    #[inline(always)]
+    fn menu_bar_ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        ui.horizontal(|ui| {
+            self.menu_button_file_ui(ui, frame);
+        });
+    }
+    
+    #[inline(always)]
     fn content(
         &mut self,
         ctx: &egui::Context,
@@ -259,49 +326,6 @@ impl PlayerApp {
         });
     }
 
-    fn menu_button_file_ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-        use windows::{w, Win32::UI::WindowsAndMessaging};
-
-        use windows::core::PCWSTR;
-        use WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
-
-        ui.menu_button("文件", |ui| {
-            if ui.button("打开").clicked() {
-                if let Some(path) = rfd::FileDialog::new()
-                    .set_title("打开音频文件")
-                    .add_filter("音频文件", &["wav", "mp3"])
-                    .pick_file()
-                {
-                    let error_msg = self.player.play_once(&path);
-                    if error_msg.is_err() {
-                        unsafe {
-                            MessageBoxW(
-                                None,
-                                PCWSTR::from_raw(
-                                    error_msg.unwrap_err_unchecked().as_ptr() as *const u16
-                                ),
-                                w!("错误"),
-                                MB_OK | MB_ICONERROR,
-                            );
-                        }
-                    }
-
-                    ui.close_menu();
-                }
-            }
-            if ui.button("退出").clicked() {
-                misc::confirm_exit(frame);
-            }
-        });
-    }
-
-    // fn appearence_ui(&mut self){}
-
-    fn menu_bar_ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-        ui.horizontal(|ui| {
-            self.menu_button_file_ui(ui, frame);
-        });
-    }
 }
 
 impl eframe::App for PlayerApp {
@@ -310,7 +334,10 @@ impl eframe::App for PlayerApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        // #[allow(unused_variables)]
+        if !self.player.is_empty() {
+            ctx.request_repaint();
+        }
+
         self.content(ctx, frame, |_ui| {
             // ui.add(egui::Label::new(emoji_icons::FULL_VOLUME));
             // ui.label(emoji_icons::NORMAL_VOLUME);
@@ -318,6 +345,3 @@ impl eframe::App for PlayerApp {
         });
     }
 }
-
-#[test]
-fn foo() {}
