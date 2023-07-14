@@ -9,8 +9,15 @@ author = "ReverseCRYstal"
 [dependencies]
 eframe = "0.21.3"
 rfd = "0.11.3"
-rodio = "0.17.1"
 mp3-duration = "0.1.10"
+
+[dependencies.rodio]
+version = "0.17.1"
+# features = ["minimp3"]
+# default-features = false
+
+[dependencies.symphonia]
+version = "0.5.3"
 
 [dependencies.windows]
 version = "0.46.0"

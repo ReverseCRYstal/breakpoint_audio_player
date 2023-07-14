@@ -100,9 +100,7 @@ impl SingletonPlayer {
         self.sink.set_speed(value);
     }
 
-    pub fn play_once(&mut self, path: &Path) -> Result<(), &str> {
-        use rodio::decoder::DecoderError::*;
-
+    pub fn play_once(&mut self, path: &Path) -> Result<(), String> {
         if self.sink.empty() {
             self.pause();
         } else {
@@ -115,19 +113,12 @@ impl SingletonPlayer {
             match rodio::Decoder::new(file) {
                 Ok(source) => {
                     self.sink.append(source);
-                    self.total_duration = mp3_duration::from_path(&path).unwrap();
+                    self.total_duration = mp3_duration::from_path(path).unwrap();
                     self.timer.clear();
 
                     Ok(())
                 }
-                Err(error) => match error {
-                    UnrecognizedFormat => Err("加载了尚未识别数据的格式。"),
-                    IoError(_) => Err("读取、写入或查找流时发生IO错误。"),
-                    DecodeError(_) => Err("流包含格式错误的数据，无法解码或解复用。"),
-                    LimitError(_) => Err("对流进行解码或解复用时达到了默认或用户定义的限制。限制用于防止来自恶意流的拒绝服务攻击。"),
-                    ResetRequired => Err("在继续之前，需要重置解复用器或解码器。"),
-                    NoStreams => Err("解码器未找到任何流"),
-                }
+                Err(error) => Err(error.to_string()),
             }
         } else {
             Ok(())
@@ -163,5 +154,4 @@ impl SingletonPlayer {
     pub fn is_paused(&self) -> bool {
         self.sink.is_paused()
     }
-
 }

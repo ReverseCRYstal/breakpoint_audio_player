@@ -23,18 +23,10 @@
 use std::time::{Duration, Instant};
 
 /// A simple timer designed for playback record
+#[derive(Default)]
 pub struct Timer {
     total_time: Duration,
     updater: Option<Instant>,
-}
-
-impl Default for Timer {
-    fn default() -> Self {
-        Self {
-            total_time: Duration::default(),
-            updater: None,
-        }
-    }
 }
 
 impl Timer {
