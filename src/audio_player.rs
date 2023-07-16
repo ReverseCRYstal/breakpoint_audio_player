@@ -33,9 +33,7 @@ use crate::timer::Timer;
 pub struct SingletonPlayer {
     sink: Sink,
     _stream: OutputStream,
-    total_duration: Duration,
     timer: Timer,
-    //progress: u64,
 }
 
 impl Default for SingletonPlayer {
@@ -45,8 +43,6 @@ impl Default for SingletonPlayer {
         Self {
             _stream: stream,
             sink: Sink::try_new(&stream_handle).unwrap(),
-            //progress: u64::default(),
-            total_duration: Duration::default(),
             timer: Timer::default(),
         }
     }
@@ -59,7 +55,7 @@ impl SingletonPlayer {
         };
 
         if let Err(result) = ret.play_once(path) {
-            Err(result.to_string())
+            Err(result)
         } else {
             Ok(ret)
         }
@@ -80,10 +76,6 @@ impl SingletonPlayer {
     }
 
     #[inline]
-    pub fn get_total_duration(&self) -> Duration {
-        self.total_duration
-    }
-
     pub fn get_progress(&mut self) -> u64 {
         //self.progress = self.timer.read().as_secs();
         //self.progress
@@ -96,6 +88,7 @@ impl SingletonPlayer {
         unimplemented!("Actually controls playback.");
     }
 
+    #[inline]
     pub fn set_speed(&self, value: f32) {
         self.sink.set_speed(value);
     }
@@ -113,7 +106,6 @@ impl SingletonPlayer {
             match rodio::Decoder::new(file) {
                 Ok(source) => {
                     self.sink.append(source);
-                    self.total_duration = mp3_duration::from_path(path).unwrap();
                     self.timer.clear();
 
                     Ok(())
@@ -146,8 +138,8 @@ impl SingletonPlayer {
     /// The value `100.0` is the 'normal' volume.\
     /// See `Sink::set_volume for details.
     #[inline]
-    pub fn set_volume(&self, value: f32) {
-        self.sink.set_volume(value / 100.0);
+    pub fn set_volume(&self, value: u8) {
+        self.sink.set_volume(value as f32 / 100.0);
     }
 
     #[inline]
