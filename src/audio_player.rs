@@ -22,7 +22,9 @@
 
 //! abstraction of playback function
 
-use rodio::{OutputStream, Sink};
+use rodio::{source::Buffered, Decoder, OutputStream, Sink, Source};
+use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 use std::time::Duration;
 
@@ -32,6 +34,7 @@ use crate::timer::Timer;
 /// Only one audio can be played and controlled in the playback queue
 pub struct SingletonPlayer {
     sink: Sink,
+    src: Option<Buffered<Decoder<BufReader<File>>>>,
     _stream: OutputStream,
     timer: Timer,
 }
@@ -41,6 +44,7 @@ impl Default for SingletonPlayer {
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
 
         Self {
+            src: None,
             _stream: stream,
             sink: Sink::try_new(&stream_handle).unwrap(),
             timer: Timer::default(),
@@ -54,7 +58,7 @@ impl SingletonPlayer {
             ..Default::default()
         };
 
-        if let Err(result) = ret.play_once(path) {
+        if let Err(result) = ret.load(path) {
             Err(result)
         } else {
             Ok(ret)
@@ -85,7 +89,13 @@ impl SingletonPlayer {
     pub fn set_progress(&mut self, value: u64) {
         // self.progress = value;
         self.timer.overwrite(Duration::from_secs(value));
-        unimplemented!("Actually controls playback.");
+        self.sink.clear();
+        self.sink.append(
+            self.src
+                .clone()
+                .unwrap()
+                .skip_duration(Duration::from_secs(value)),
+        );
     }
 
     #[inline]
@@ -93,7 +103,7 @@ impl SingletonPlayer {
         self.sink.set_speed(value);
     }
 
-    pub fn play_once(&mut self, path: &Path) -> Result<(), String> {
+    pub fn load(&mut self, path: &Path) -> Result<(), String> {
         if self.sink.empty() {
             self.pause();
         } else {
@@ -105,7 +115,9 @@ impl SingletonPlayer {
 
             match rodio::Decoder::new(file) {
                 Ok(source) => {
-                    self.sink.append(source);
+                    let buffered = source.buffered();
+                    self.src = Some(buffered.clone());
+                    self.sink.append(buffered);
                     self.timer.clear();
 
                     Ok(())

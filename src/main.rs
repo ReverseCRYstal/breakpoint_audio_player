@@ -5,7 +5,9 @@ mod app;
 mod audio_player;
 mod constants;
 mod gui;
+mod inner_panel;
 mod misc;
+mod tests;
 mod timer;
 
 use app::Mode;

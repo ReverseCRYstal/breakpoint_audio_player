@@ -1,6 +1,7 @@
 use crate::audio_player::SingletonPlayer;
 use crate::constants;
 use crate::gui;
+use crate::inner_panel::*;
 
 use std::path::PathBuf;
 
@@ -76,27 +77,23 @@ impl App {
         };
 
         ui.menu_button(volume_icon, |ui| {
-            ui.add(
-                egui::Slider::new(&mut self.volume, 0..=100)
-                    .show_value(false)
-                    .vertical(),
-            );
-            if ui
-                .add_sized([30.0, 10.0], Button::new(volume_icon))
-                .clicked()
-            {
-                self.is_muted = !self.is_muted;
-            }
-        });
-        let resp = ui
-            .add(egui::Button::new(RichText::new(volume_icon).size(15.0)).frame(false))
-            .context_menu(|ui| {
-                ui.add(egui::Slider::new(&mut self.volume, 0..=100).vertical());
+            ui.horizontal(|ui| {
+                if ui
+                    .add_sized([30.0, 16.0], Button::new(volume_icon))
+                    .clicked()
+                {
+                    self.is_muted = !self.is_muted;
+                }
+                ui.add(
+                    egui::Slider::new(&mut self.volume, 0..=100)
+                        .trailing_fill(true)
+                        .show_value(false)
+                        .custom_formatter(|v, _| (v as u64).to_string()),
+                );
             });
-
-        if resp.clicked() {
-            self.is_muted = !self.is_muted;
-        }
+        })
+        .response
+        .on_hover_text("调整音量");
 
         self.player.set_volume(self.volume);
     }
@@ -109,7 +106,7 @@ impl App {
                 let rounding = 3.0;
                 let (play_control_icon, icon_size) =
                     if self.player.is_paused() || self.player.is_empty() {
-                        (constants::RESUME, size + 5.0)
+                        (constants::RESUME, size)
                     } else {
                         (constants::PAUSE, size)
                     };
@@ -125,7 +122,8 @@ impl App {
                 }
 
                 if ui
-                    .add(
+                    .add_sized(
+                        [50.0, 50.0],
                         egui::Button::new(RichText::new(play_control_icon).size(icon_size))
                             .rounding(rounding),
                     )
@@ -160,9 +158,11 @@ impl App {
                         break;
                     }
                 }
-
-                self.volume_control(ui);
             });
+        });
+
+        ui.group(|ui| {
+            self.volume_control(ui);
         });
     }
 
@@ -182,7 +182,9 @@ impl App {
 
                 if let Some(path) = handle {
                     let path = &path;
-                    let error_msg = self.player.play_once(path);
+                    let error_msg = self.player.load(path);
+                    self.total_duration = mp3_duration::from_path(path).unwrap().as_secs();
+
                     if let Err(err_msg) = error_msg {
                         unsafe {
                             MessageBoxW(
@@ -219,7 +221,7 @@ impl App {
     #[inline(always)]
     fn progress_silder(&mut self, ui: &mut Ui) {
         ui.group(|ui| {
-            let tostring = |duration: usize| -> String {
+            let tostring = |duration: u64| -> String {
                 let seconds = duration % 60;
                 let mut minutes = duration / 60;
                 let total_hours = minutes / 60;
@@ -229,21 +231,26 @@ impl App {
                 } else {
                     String::new()
                 };
-                format!("{hours}{minutes}:{seconds}")
+                format!("{hours}{minutes:0>2}:{seconds:0>2}")
             };
 
             let play_progress = self.player.get_progress();
 
+            let resp = ui.add(
+                egui::Slider::new(&mut self.progress_buffer, 0..=self.total_duration)
+                    .trailing_fill(true)
+                    .custom_formatter(|v, _| {
+                        format!(
+                            "{:} / {:}",
+                            tostring(v as u64),
+                            tostring(self.total_duration)
+                        )
+                    }),
+            );
+
             if self.progress_buffer < play_progress {
                 self.progress_buffer = play_progress;
             }
-
-            let resp = ui.add(
-                egui::Slider::new(&mut self.progress_buffer, 0..=self.total_duration)
-                    .custom_formatter(|v, rng| {
-                        format!("{:} / {:}", tostring(v as usize), tostring(*rng.end()))
-                    }),
-            );
 
             if resp.drag_released() {
                 self.player.set_progress(self.progress_buffer);
@@ -252,22 +259,12 @@ impl App {
     }
 
     #[inline(always)]
-    fn show_side_bar(&mut self, ui: &mut Ui, rect: egui::Rect) {
+    fn show_side_bar(&mut self, ui: &mut Ui) {
         self.volume_speed_controller(ui);
     }
 
     #[inline(always)]
-    fn show_bottom_bar(&mut self, ui: &mut Ui, rect: egui::Rect) {
-        let painter = ui.painter();
-        let visual = ui.visuals();
-
-        painter.line_segment(
-            [rect.left_top(), rect.right_top()],
-            visual.noninteractive().bg_stroke,
-        );
-
-        ui.add_space(3.0);
-
+    fn show_bottom_bar(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             self.play_control_buttons(ui);
             self.progress_silder(ui);
@@ -281,9 +278,10 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
-        if self.player.is_empty() || self.player.is_paused() {
+        if !(self.player.is_empty() || self.player.is_paused()) {
             ctx.request_repaint();
         }
+
         let title = self.window_title.to_string();
 
         gui::window_frame(ctx, frame, title.as_str(), true, |frame, ui| {
@@ -291,32 +289,30 @@ impl eframe::App for App {
             self.menu_bar_ui(ui, frame);
             ui.separator();
 
+            let mut spawner = PanelSpawner::new(ui);
+
             match self.mode {
                 Mode::Edit => {}
                 Mode::Play => {}
             }
 
-            let content_rect = ui.max_rect();
-            let should_show_bottom = self.player.is_empty();
-            let side_rect = {
-                let mut rect = content_rect;
-                rect
-            };
-
-            let mut side_bar_ui = ui.child_ui(side_rect, *ui.layout());
-
-            self.show_side_bar(&mut side_bar_ui, side_rect);
-
-            let bottom_rect = {
-                let mut rect = content_rect;
-                rect.min.y = rect.max.y - 100.0;
-                rect
-            };
-
-            let mut bottom_bar_ui = ui.child_ui(bottom_rect, *ui.layout());
-            if should_show_bottom {
-                self.show_bottom_bar(&mut bottom_bar_ui, bottom_rect);
+            if !self.player.is_empty() {
+                spawner
+                    .allocate(100.0, Dir4::Bottom, Some(3.0))
+                    .separator()
+                    .show(ctx, |ui| {
+                        self.show_bottom_bar(ui);
+                    });
             }
+
+            spawner
+                .allocate(100.0, Dir4::Left, Some(3.0))
+                .separator()
+                .show(ctx, |ui| {
+                    self.show_side_bar(ui);
+                });
+
+            spawner.show(|_ui| {});
         });
     }
 }

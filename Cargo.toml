@@ -2,7 +2,6 @@
 name = "breakpoint_audio_player"
 version = "0.0.1"
 edition = "2021"
-author = "ReverseCRYstal"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,10 +20,7 @@ version = "0.5.3"
 
 [dependencies.windows]
 version = "0.46.0"
-features = [
-    "Win32_UI_WindowsAndMessaging", 
-    "Win32_Foundation"
-]
+features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"]
 
 [profile.release]
 lto = "fat"

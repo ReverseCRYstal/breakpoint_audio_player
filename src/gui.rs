@@ -115,7 +115,7 @@ fn title_bar_ui(
 
     let title_bar_response = ui.interact(*title_bar_rect, Id::new("title_bar"), Sense::click());
 
-    ui.add_space(8.0);
+    ui.add_space(6.0);
 
     global_dark_light_mode_switch_localizable(ui, "切换到白昼模式", "切换到夜间模式");
 
