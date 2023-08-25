@@ -7,13 +7,17 @@ edition = "2021"
 
 [dependencies]
 eframe = "0.22.0"
-rfd = "0.11.3"
+egui-notify = "0.8.0"
 mp3-duration = "0.1.10"
+rfd = "0.11.3"
+zip = "0.6.6"
+config = "0.13.3"
+anyhow = "1.0.75"
 
 [dependencies.rodio]
 version = "0.17.1"
-# features = ["minimp3"]
-# default-features = false
+features = ["minimp3"]
+default-features = false
 
 [dependencies.symphonia]
 version = "0.5.3"

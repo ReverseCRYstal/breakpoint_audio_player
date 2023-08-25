@@ -20,14 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//! abstraction of playback function
-
+use rodio::decoder::DecoderError;
 use rodio::{source::Buffered, Decoder, OutputStream, Sink, Source};
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::misc;
 use crate::timer::Timer;
 
 /// Play an audio with a `Sink`
@@ -37,14 +37,22 @@ pub struct SingletonPlayer {
     src: Option<Buffered<Decoder<BufReader<File>>>>,
     _stream: OutputStream,
     timer: Timer,
+    total_duration: Option<Duration>,
 }
 
 impl Default for SingletonPlayer {
     fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SingletonPlayer {
+    pub fn new() -> Self {
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
 
         Self {
             src: None,
+            total_duration: None,
             _stream: stream,
             sink: Sink::try_new(&stream_handle).unwrap(),
             timer: Timer::default(),
@@ -53,80 +61,53 @@ impl Default for SingletonPlayer {
 }
 
 impl SingletonPlayer {
-    pub fn try_new(path: &Path) -> Result<Self, String> {
-        let mut ret = Self {
-            ..Default::default()
-        };
-
-        if let Err(result) = ret.load(path) {
-            Err(result)
-        } else {
-            Ok(ret)
-        }
-    }
-
-    #[inline]
-    pub fn switch_to_status(&mut self, to_on: bool) {
-        if to_on {
-            self.resume()
-        } else {
-            self.pause()
-        }
-    }
-
-    #[inline]
-    pub fn switch_playback_status(&mut self) {
-        self.switch_to_status(self.is_paused())
-    }
-
-    #[inline]
-    pub fn get_progress(&mut self) -> u64 {
-        //self.progress = self.timer.read().as_secs();
-        //self.progress
-        self.timer.read().as_secs()
-    }
-
-    pub fn set_progress(&mut self, value: u64) {
-        // self.progress = value;
-        self.timer.overwrite(Duration::from_secs(value));
-        self.sink.clear();
-        self.sink.append(
-            self.src
-                .clone()
-                .unwrap()
-                .skip_duration(Duration::from_secs(value)),
-        );
-    }
-
-    #[inline]
-    pub fn set_speed(&self, value: f32) {
-        self.sink.set_speed(value);
-    }
-
-    pub fn load(&mut self, path: &Path) -> Result<(), String> {
+    pub fn replace_file(&mut self, reader: BufReader<File>) -> Result<(), anyhow::Error> {
         if self.sink.empty() {
             self.pause();
         } else {
             self.sink.clear();
-        }
+        };
+        // rodio::Decoder::new(*reader).map(|decoder| {
+        //     let buffered = decoder.buffered();
+        //     self.src = Some(buffered.clone());
+        //     self.sink.append(buffered);
+        //     self.timer.clear();
+        // })?;
+        // mp3_duration::from_read(reader);
+        Ok(())
+    }
+}
 
-        if !path.to_str().unwrap().is_empty() {
-            let file = std::io::BufReader::new(std::fs::File::open(path).unwrap());
+impl SingletonPlayer {
+    #[inline(always)]
+    pub fn get_progress(&mut self) -> u64 {
+        self.timer.read().as_secs()
+    }
 
-            match rodio::Decoder::new(file) {
-                Ok(source) => {
-                    let buffered = source.buffered();
-                    self.src = Some(buffered.clone());
-                    self.sink.append(buffered);
-                    self.timer.clear();
+    pub fn set_progress(&mut self, value: u64) {
+        if self.is_empty() {
+            // self.progress = value;
+            self.timer.overwrite(Duration::from_secs(value));
 
-                    Ok(())
-                }
-                Err(error) => Err(error.to_string()),
+            let paused = self.is_paused();
+
+            self.sink.skip_one();
+            self.sink.append(unsafe {
+                self.src
+                    .clone()
+                    .unwrap_unchecked()
+                    .skip_duration(Duration::from_secs(value))
+            });
+
+            if paused {
+                self.pause();
             }
-        } else {
-            Ok(())
         }
+    }
+
+    #[inline(always)]
+    pub fn set_speed(&self, value: f32) {
+        self.sink.set_speed(value);
     }
 
     #[inline]
@@ -141,14 +122,12 @@ impl SingletonPlayer {
         self.sink.pause();
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.sink.empty()
     }
 
-    /// Sets volume by percentage. \
-    /// The value `100.0` is the 'normal' volume.\
-    /// See `Sink::set_volume for details.
+    /// 注意 `value` 是百分比音量
     #[inline]
     pub fn set_volume(&self, value: u8) {
         self.sink.set_volume(value as f32 / 100.0);
@@ -157,5 +136,10 @@ impl SingletonPlayer {
     #[inline]
     pub fn is_paused(&self) -> bool {
         self.sink.is_paused()
+    }
+
+    #[inline]
+    pub fn total_duration(&self) -> Option<Duration> {
+        self.total_duration
     }
 }

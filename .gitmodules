@@ -1,0 +1,3 @@
+[submodule "rodio"]
+	path = rodio
+	url = https://github.com/ReverseCRYstal/rodio-elasped.git

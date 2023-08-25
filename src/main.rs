@@ -3,32 +3,36 @@
 
 mod app;
 mod audio_player;
+mod breakpoint;
 mod constants;
 mod gui;
-mod inner_panel;
 mod misc;
+mod subpanel;
 mod tests;
 mod timer;
 
-use app::Mode;
 use std::path::PathBuf;
 
-fn main() -> Result<(), eframe::Error> {
+fn main() -> Result<(), anyhow::Error> {
     let argv: Vec<String> = std::env::args().collect();
-    let (path, mode) = if argv.len() >= 2 {
-        (PathBuf::from(argv[1].as_str()), Mode::Play)
+
+    let file_path = if argv.len() >= 2 {
+        Some(PathBuf::from(argv[1].to_string()))
     } else {
-        (PathBuf::new(), Mode::Edit)
+        None
     };
 
+    let app_path = PathBuf::from(argv[0].as_str());
+
     eframe::run_native(
-        constants::DEFAULT_WINDOW_TITLE,
+        constants::literal::DEFAULT_WINDOW_TITLE,
         window_option(),
         Box::new(|cc| {
             misc::setup_font(&cc.egui_ctx);
-            Box::new(app::App::new(path, mode))
+            Box::new(app::App::new(app_path.into(), file_path))
         }),
     )
+    .map_err(|error| anyhow::anyhow!(error.to_string()))
 }
 
 #[inline(always)]

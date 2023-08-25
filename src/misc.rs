@@ -1,5 +1,9 @@
 use eframe::egui;
 
+use std::ffi::OsStr;
+use std::io::{Error, ErrorKind};
+use std::path::PathBuf;
+
 #[inline]
 pub fn setup_font(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
@@ -34,4 +38,30 @@ pub fn setup_font(ctx: &egui::Context) {
         .push("my_font".to_owned());
 
     ctx.set_fonts(fonts);
+}
+
+/// 处理将要打开的文件
+pub fn handle_file(src_path: &PathBuf, extract_path: &PathBuf) -> Result<PathBuf, std::io::Error> {
+    if let Some(ext) = src_path.extension() {
+        match ext.to_str().unwrap_or_default() {
+            "bax" => {
+                let mut file =
+                    zip::ZipArchive::new(std::io::BufReader::new(std::fs::File::open(src_path)?))?;
+
+                file.extract(extract_path.join("/path/"))?;
+
+                Ok(PathBuf::new())
+            }
+            "mp3" => Ok(src_path.clone()),
+            _ => Err(Error::new(
+                ErrorKind::InvalidInput,
+                "Opening the current file is not supported.",
+            )),
+        }
+    } else {
+        Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Opening the current file is not supported.",
+        ))
+    }
 }
