@@ -20,14 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use rodio::decoder::DecoderError;
+//use rodio::decoder::DecoderError;
 use rodio::{source::Buffered, Decoder, OutputStream, Sink, Source};
 use std::fs::File;
 use std::io::BufReader;
-use std::path::{Path, PathBuf};
+//use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::misc;
 use crate::timer::Timer;
 
 /// Play an audio with a `Sink`
@@ -67,12 +66,14 @@ impl SingletonPlayer {
         } else {
             self.sink.clear();
         };
-        // rodio::Decoder::new(*reader).map(|decoder| {
-        //     let buffered = decoder.buffered();
-        //     self.src = Some(buffered.clone());
-        //     self.sink.append(buffered);
-        //     self.timer.clear();
-        // })?;
+
+        rodio::Decoder::new(reader).map(|decoder| {
+            let buffered = decoder.buffered();
+
+            self.src = Some(buffered.clone());
+            self.sink.append(buffered);
+            self.timer.clear();
+        })?;
         // mp3_duration::from_read(reader);
         Ok(())
     }

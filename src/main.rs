@@ -7,13 +7,16 @@ mod breakpoint;
 mod constants;
 mod gui;
 mod misc;
-mod subpanel;
+mod open_status_guard;
 mod tests;
 mod timer;
 
+use eframe::egui;
 use std::path::PathBuf;
 
 fn main() -> Result<(), anyhow::Error> {
+    eprint!("Hey {}", env!("OUT_DIR"));
+
     let argv: Vec<String> = std::env::args().collect();
 
     let file_path = if argv.len() >= 2 {
@@ -25,11 +28,11 @@ fn main() -> Result<(), anyhow::Error> {
     let app_path = PathBuf::from(argv[0].as_str());
 
     eframe::run_native(
-        constants::literal::DEFAULT_WINDOW_TITLE,
+        constants::literal::APP_NAME,
         window_option(),
         Box::new(|cc| {
             misc::setup_font(&cc.egui_ctx);
-            Box::new(app::App::new(app_path.into(), file_path))
+            Box::new(app::App::new(app_path, file_path))
         }),
     )
     .map_err(|error| anyhow::anyhow!(error.to_string()))
@@ -37,8 +40,6 @@ fn main() -> Result<(), anyhow::Error> {
 
 #[inline(always)]
 fn window_option() -> eframe::NativeOptions {
-    use eframe::egui;
-
     use windows::Win32::UI::WindowsAndMessaging::{
         GetSystemMetrics, SM_CXFULLSCREEN, SM_CYFULLSCREEN,
     };

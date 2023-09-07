@@ -5,22 +5,33 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[build-dependencies]
+toml = "0.7.6"
+chrono = "0.4.27"
+
+[build-dependencies.serde]
+version = "1.0.188"
+features = ["derive"]
+
 [dependencies]
-eframe = "0.22.0"
 egui-notify = "0.8.0"
 mp3-duration = "0.1.10"
 rfd = "0.11.3"
 zip = "0.6.6"
-config = "0.13.3"
+serde_json = "1.0.105"
 anyhow = "1.0.75"
+symphonia = "0.5.3"
+egui = { version = "0.22.0", features = ["serde"] }
+eframe = "0.22.0"
+
+[dependencies.serde]
+version = "1.0.188"
+features = ["derive"]
 
 [dependencies.rodio]
 version = "0.17.1"
 features = ["minimp3"]
 default-features = false
-
-[dependencies.symphonia]
-version = "0.5.3"
 
 [dependencies.windows]
 version = "0.46.0"
