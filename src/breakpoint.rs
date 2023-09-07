@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Deserialize, Serialize)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Deserialize, Serialize, Default)]
 pub struct Breakpoint {
     hint: String,
     anchored_at: Duration,

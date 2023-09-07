@@ -10,6 +10,7 @@ pub mod icon {
     pub const PREV_BRK_PT: &str = "⏪";
     pub const PAUSE: &str = "⏸";
     pub const RESUME: &str = "⏵";
+    pub const RESET: &str = "⏹";
     pub const MUTED_VOLUME: &str = "🔇";
     pub const NO_VOLUME: &str = "🔈";
     pub const NORMAL_VOLUME: &str = "🔉";

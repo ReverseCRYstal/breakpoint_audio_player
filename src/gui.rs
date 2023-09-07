@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use egui::{Button, Context, Ui, Visuals};
+use egui::{Button, Ui, Visuals};
 
 use windows::{w, Win32::UI::WindowsAndMessaging};
 

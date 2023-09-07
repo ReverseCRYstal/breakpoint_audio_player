@@ -1,5 +1,7 @@
 use eframe::egui;
 
+use egui::{Button, RichText};
+
 use std::collections::BinaryHeap;
 use std::fs::File;
 use std::io::{BufReader, Write};
@@ -43,6 +45,15 @@ pub fn setup_font(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
+#[inline(always)]
+pub fn form_icon(text: impl Into<String>) -> RichText {
+    RichText::new(text).family(egui::FontFamily::Name("icon_font".into()))
+}
+
+#[inline(always)]
+pub fn form_button(text: impl Into<String>) -> Button {
+    Button::new(form_icon(text)).rounding(3.)
+}
 /// # Basically
 /// A file with a extension name bax
 /// is a zip archive

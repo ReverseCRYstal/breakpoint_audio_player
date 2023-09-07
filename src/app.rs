@@ -2,10 +2,10 @@ use crate::audio_player::SingletonPlayer;
 use crate::breakpoint::Breakpoint;
 use crate::constants;
 use crate::gui;
-use crate::misc;
+use crate::misc::{self, form_button};
 use crate::open_status_guard::Guardian;
 
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, VecDeque};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -18,10 +18,17 @@ use egui_notify::Anchor;
 
 type VoidResult = Result<(), anyhow::Error>;
 
+enum FileExtension {
+    Mp3,
+    Bax,
+    Nil,
+}
+
 pub struct App {
+    action_queue: VecDeque<Breakpoint>,
+    file_category: FileExtension,
     toasts: egui_notify::Toasts,
     breakpoints: BinaryHeap<Breakpoint>,
-    this_path: PathBuf,
     player: SingletonPlayer,
     is_muted: bool,
     should_confirm_exit: bool,
@@ -34,10 +41,11 @@ pub struct App {
 // construction
 impl App {
     #[inline(always)]
-    pub fn new(app_path: PathBuf, file_to_open: Option<PathBuf>) -> Self {
+    pub fn new(file_to_open: Option<PathBuf>) -> Self {
         let mut player = SingletonPlayer::new();
         let mut toasts = egui_notify::Toasts::default().with_anchor(Anchor::TopRight);
         let mut breakpoints = BinaryHeap::new();
+        let mut file_cat = FileExtension::Nil;
 
         let result = || -> VoidResult {
             if file_to_open.as_ref().is_some_and(|buf| buf.exists()) {
@@ -54,11 +62,15 @@ impl App {
 
                 let p = match extension {
                     constants::literal::EXTENSION_NAME => {
-                        let root = misc::unzip(&p, &app_path)?;
+                        let root = misc::unzip(&p, &std::env::current_dir()?)?;
                         breakpoints = misc::handle_config(&root)?;
+                        file_cat = FileExtension::Bax;
                         Ok(root.join("audio.mp3"))
                     }
-                    "mp3" => Ok(p.clone()),
+                    "mp3" => {
+                        file_cat = FileExtension::Mp3;
+                        Ok(p.clone())
+                    }
                     _ => Err(unsupported_err()),
                 };
 
@@ -76,9 +88,10 @@ impl App {
         }
 
         Self {
+            action_queue: VecDeque::new().resize(50, Breakpoint::default()),
+            file_category: file_cat,
             toasts,
             player,
-            this_path: app_path,
             breakpoints,
             is_muted: false,
             should_confirm_exit: true,
@@ -175,7 +188,7 @@ impl App {
 
 // literals
 impl App {
-    const SPEED_OPTIONS: [&str; 5] = ["0.5×", "0.75×", "1.0×", "1.25×", "1.5×"];
+    const SPEED_OPTIONS: [&str; 5] = ["0.5×", "0.75×", "正常", "1.25×", "1.5×"];
 }
 
 // playback ui
@@ -183,48 +196,53 @@ impl App {
     #[inline(always)]
     fn progress_slider(&mut self, ui: &mut Ui) {
         let mut place_holder = 0;
-        ui.group(|ui| {
-            let tostring = |duration: u64| -> String {
-                let seconds = duration % 60;
-                let mut minutes = duration / 60;
-                let total_hours = minutes / 60;
-                minutes %= 60;
-                let hours = if total_hours != 0 {
-                    format!("{total_hours}:")
-                } else {
-                    String::new()
-                };
-                format!("{hours}{minutes:0>2}:{seconds:0>2}")
+        let max_rect = {
+            let mut rect = ui.max_rect();
+            rect.max.y = 30.;
+            rect.shrink(5.)
+        };
+        let tostring = |duration: u64| -> String {
+            let seconds = duration % 60;
+            let mut minutes = duration / 60;
+            let total_hours = minutes / 60;
+            minutes %= 60;
+            let hours = if total_hours != 0 {
+                format!("{total_hours}:")
+            } else {
+                String::new()
             };
+            format!("{hours}{minutes:0>2}:{seconds:0>2}")
+        };
 
-            let play_progress = self.player.get_progress();
-            let resp =
-                if let Some(total_duration) = self.player.total_duration().map(|v| v.as_secs()) {
-                    ui.add_enabled(
-                        true,
-                        Slider::new(&mut self.progress_buffer, 0..=total_duration)
-                            .trailing_fill(true)
-                            .custom_formatter(|v, _| {
-                                format!("{:} / {:}", tostring(v as u64), tostring(total_duration))
-                            }),
-                    )
-                } else {
-                    ui.add_enabled(
-                        false,
-                        Slider::new(&mut place_holder, 0..=1)
-                            .show_value(false)
-                            .text("00:00"),
-                    )
-                };
+        let play_progress = self.player.get_progress();
+        let resp = if let Some(total_duration) = self.player.total_duration().map(|v| v.as_secs()) {
+            ui.add_enabled(
+                true,
+                Slider::new(&mut self.progress_buffer, 0..=total_duration)
+                    .trailing_fill(true)
+                    .custom_formatter(|v, _| {
+                        format!("{:} / {:}", tostring(v as u64), tostring(total_duration))
+                    }),
+            )
+        } else {
+            ui.set_enabled(false);
+            let resp = ui.add(
+                // max_rect,
+                Slider::new(&mut place_holder, 0..=1)
+                    .show_value(false)
+                    .text("00:00"),
+            );
+            ui.set_enabled(true);
+            resp
+        };
 
-            if self.progress_buffer < play_progress {
-                self.progress_buffer = play_progress;
-            }
+        if self.progress_buffer < play_progress {
+            self.progress_buffer = play_progress;
+        }
 
-            if resp.drag_released() {
-                self.player.set_progress(self.progress_buffer);
-            }
-        });
+        if resp.drag_released() {
+            self.player.set_progress(self.progress_buffer);
+        }
     }
 
     #[inline(always)]
@@ -267,7 +285,7 @@ impl App {
         ui.menu_button("播放倍速", |ui| {
             for (index, text) in Self::SPEED_OPTIONS.iter().enumerate() {
                 let text = if self.cur_speed_enum_idx == index {
-                    String::from("⏵")
+                    String::from("✔")
                 } else {
                     String::new()
                 } + *text;
@@ -281,54 +299,48 @@ impl App {
             }
         });
     }
+    const BTN_SIZE: [f32; 2] = [50., 50.];
 
+    #[inline(always)]
+    fn breakpoint_switch_buttons(&mut self, ui: &mut Ui) {
+        use constants::icon::{NEXT_BRK_PT, PREV_BRK_PT};
+        ui.group(|ui| {
+            if ui.add(form_button(PREV_BRK_PT)).clicked() {
+                unimplemented!();
+            }
+            if ui.add(form_button(NEXT_BRK_PT)).clicked() {
+                unimplemented!();
+            }
+        });
+    }
+
+    // TODO depart buttons
     #[inline(always)]
     fn play_control_buttons(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            let size = 35.0;
-            let rounding = 3.0;
-            let (play_control_icon, icon_size) =
-                if self.player.is_paused() || self.player.is_empty() {
-                    (constants::icon::RESUME, size)
-                } else {
-                    (constants::icon::PAUSE, size)
-                };
+            let _size = 35.0;
+            let _rounding = 3.0;
+            let enable_play_btn = self.player.is_empty();
 
-            if ui
-                .add(
-                    egui::Button::new(RichText::new(constants::icon::PREV_BRK_PT).size(icon_size))
-                        .rounding(rounding),
-                )
-                .clicked()
-            {
-                unimplemented!();
-            }
+            let play_control_icon = if self.player.is_paused() || enable_play_btn {
+                constants::icon::RESUME
+            } else {
+                constants::icon::PAUSE
+            };
 
-            if ui
-                .add_sized(
-                    [50.0, 50.0],
-                    egui::Button::new(RichText::new(play_control_icon).size(icon_size))
-                        .rounding(rounding),
-                )
-                .clicked()
-                && !self.player.is_empty()
-            {
-                if self.player.is_paused() {
-                    self.player.resume();
-                } else {
-                    self.player.pause();
+            ui.group(|ui| {
+                if ui.add(form_button(constants::icon::RESET)).clicked() {
+                    unimplemented!();
                 }
-            }
 
-            if ui
-                .add(
-                    Button::new(RichText::new(constants::icon::NEXT_BRK_PT).size(icon_size))
-                        .rounding(rounding),
-                )
-                .clicked()
-            {
-                unimplemented!();
-            }
+                if ui.add(form_button(play_control_icon)).clicked() && !self.player.is_empty() {
+                    if self.player.is_paused() {
+                        self.player.resume();
+                    } else {
+                        self.player.pause();
+                    }
+                }
+            });
         });
     }
 }
@@ -351,11 +363,11 @@ impl App {
                 self.player
                     .replace_file(BufReader::new(File::open(misc::unzip(
                         &path,
-                        &self.this_path.join("temp"),
+                        &std::env::current_dir()?.join("temp"),
                     )?)?))?;
             }
         }
-
+        // if ui.add_enabled(self.breakpoints.is, widget)
         if ui.button("保存").clicked() {
             unimplemented!()
         }
@@ -417,12 +429,16 @@ impl App {
         egui::TopBottomPanel::bottom("bottom_panel")
             .frame(panel_frame)
             .show(ctx, |ui| {
-                ui.add_space(4.0);
-                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                ui.add_space(5.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(5.0);
                     self.play_control_buttons(ui);
+                    self.progress_slider(ui);
+                    self.breakpoint_switch_buttons(ui);
                     self.volume_control(ui);
                 });
-                let painter = ui.painter();
+                ui.add_space(5.0);
+                let _painter = ui.painter();
                 //painter.debug_rect(ui.max_rect(), egui::Color32::BLUE, "max");
             });
     }
@@ -454,7 +470,11 @@ impl App {
             .create_window("教程", false)
             .collapsible(false)
             .default_pos(center_pos)
-            .show(ctx, |_ui| {});
+            .show(ctx, |ui| {
+                use constants::icon::*;
+                ui.label("将光标悬停在控件上以查看功能");
+                ui.label(format!("{} {}", RESET, "重置播放进度"));
+            });
     }
 }
 
@@ -536,7 +556,7 @@ impl eframe::App for App {
                     visuals.noninteractive().bg_stroke,
                 );
 
-                let ui = &mut ui.child_ui(ui.available_rect_before_wrap(), *ui.layout());
+                let _ui = &mut ui.child_ui(ui.available_rect_before_wrap(), *ui.layout());
 
                 self.bottom_panel(panel_frame, ctx);
             })

@@ -15,8 +15,6 @@ use eframe::egui;
 use std::path::PathBuf;
 
 fn main() -> Result<(), anyhow::Error> {
-    eprint!("Hey {}", env!("OUT_DIR"));
-
     let argv: Vec<String> = std::env::args().collect();
 
     let file_path = if argv.len() >= 2 {
@@ -25,14 +23,12 @@ fn main() -> Result<(), anyhow::Error> {
         None
     };
 
-    let app_path = PathBuf::from(argv[0].as_str());
-
     eframe::run_native(
         constants::literal::APP_NAME,
         window_option(),
         Box::new(|cc| {
             misc::setup_font(&cc.egui_ctx);
-            Box::new(app::App::new(app_path, file_path))
+            Box::new(app::App::new(file_path))
         }),
     )
     .map_err(|error| anyhow::anyhow!(error.to_string()))

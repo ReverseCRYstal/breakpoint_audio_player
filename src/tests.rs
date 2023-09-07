@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 #[test]
 fn sound_playback() {
     use std::fs::File;
@@ -106,6 +104,7 @@ fn sound_playback() {
 #[test]
 fn total_duration() {
     use rodio::*;
+    use std::time::Instant;
 
     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
 
@@ -118,7 +117,7 @@ fn total_duration() {
         .unwrap(),
     );
     let file = Decoder::new(file).unwrap();
-    let mut file = file.buffered();
+    let file = file.buffered();
 
     // 4:45
     dbg!(file.current_frame_len().unwrap());
