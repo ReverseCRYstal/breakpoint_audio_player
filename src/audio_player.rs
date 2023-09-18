@@ -1,26 +1,3 @@
-// MIT License
-//
-// Copyright (c) 2023 CrYStaL
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-
-//use rodio::decoder::DecoderError;
 use rodio::{source::Buffered, Decoder, OutputStream, Sink, Source};
 use std::fs::File;
 use std::io::BufReader;
@@ -60,12 +37,14 @@ impl SingletonPlayer {
 }
 
 impl SingletonPlayer {
-    pub fn replace_file(&mut self, reader: BufReader<File>) -> Result<(), anyhow::Error> {
+    pub fn replace_file(&mut self, mut reader: BufReader<File>) -> Result<(), anyhow::Error> {
         if self.sink.empty() {
             self.pause();
         } else {
             self.sink.clear();
         };
+
+        self.total_duration = Some(mp3_duration::from_read(reader.get_mut())?);
 
         rodio::Decoder::new(reader).map(|decoder| {
             let buffered = decoder.buffered();
@@ -74,31 +53,32 @@ impl SingletonPlayer {
             self.sink.append(buffered);
             self.timer.clear();
         })?;
-        // mp3_duration::from_read(reader);
         Ok(())
+    }
+
+    pub fn clear(&mut self) {
+        self.total_duration = None;
+        self.sink.clear();
+        self.src = None;
     }
 }
 
 impl SingletonPlayer {
     #[inline(always)]
-    pub fn get_progress(&mut self) -> u64 {
-        self.timer.read().as_secs()
+    pub fn get_progress(&self) -> Duration {
+        self.timer.read()
     }
 
-    pub fn set_progress(&mut self, value: u64) {
-        if self.is_empty() {
+    pub fn set_progress(&mut self, value: Duration) {
+        if !self.is_empty() {
             // self.progress = value;
-            self.timer.overwrite(Duration::from_secs(value));
+            self.timer.overwrite(value);
 
             let paused = self.is_paused();
 
             self.sink.skip_one();
-            self.sink.append(unsafe {
-                self.src
-                    .clone()
-                    .unwrap_unchecked()
-                    .skip_duration(Duration::from_secs(value))
-            });
+            self.sink
+                .append(unsafe { self.src.clone().unwrap_unchecked().skip_duration(value) });
 
             if paused {
                 self.pause();

@@ -1,23 +1,39 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Deserialize, Serialize, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Deserialize, Serialize, Default, Clone)]
 pub struct Breakpoint {
     hint: String,
-    anchored_at: Duration,
+    timepoint: Duration,
 }
 
 impl From<Duration> for Breakpoint {
     fn from(value: Duration) -> Self {
         Self {
             hint: String::new(),
-            anchored_at: value,
+            timepoint: value,
+        }
+    }
+}
+
+impl From<String> for Breakpoint {
+    fn from(value: String) -> Self {
+        Self {
+            hint: value,
+            timepoint: Duration::ZERO,
         }
     }
 }
 
 impl Breakpoint {
-    fn new(hint: String, anchored_at: Duration) -> Self {
-        Self { hint, anchored_at }
+    pub fn new(timepoint: Duration, hint: String) -> Self {
+        Self { hint, timepoint }
+    }
+    pub fn hint(&self) -> String {
+        self.hint.clone()
+    }
+
+    pub fn timepoint(&self) -> Duration {
+        self.timepoint
     }
 }

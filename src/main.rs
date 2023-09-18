@@ -12,7 +12,7 @@ mod tests;
 mod timer;
 
 use eframe::egui;
-use std::path::PathBuf;
+use std::{env::current_dir, path::PathBuf};
 
 fn main() -> Result<(), anyhow::Error> {
     let argv: Vec<String> = std::env::args().collect();
@@ -22,6 +22,12 @@ fn main() -> Result<(), anyhow::Error> {
     } else {
         None
     };
+
+    let temp = current_dir().unwrap().join("temp");
+
+    if !temp.exists() {
+        std::fs::create_dir(temp)?;
+    }
 
     eframe::run_native(
         constants::literal::APP_NAME,

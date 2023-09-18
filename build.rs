@@ -44,17 +44,21 @@ fn main() {
     let table = include_str!("Cargo.toml").parse::<toml::Table>().unwrap();
     let package = table.get("package").unwrap();
 
-    let edition = package["edition"].as_str().unwrap();
-    let version = package["version"].as_str().unwrap();
-
     println!(
-        "cargo:rustc-env=GIT_HASH={}",
+        "cargo:rustc-env=COMMIT_HASH={}",
         String::from_utf8(git_commit.stdout).unwrap().as_str()
     );
-    println!("cargo:rustc-env=RUST_EDITION={}", edition);
-    println!("cargo:rustc-env=APP_VERSION={}", version);
+
+    println!(
+        "cargo:rustc-env=RUST_EDITION={}",
+        package["edition"].as_str().unwrap()
+    );
+    println!(
+        "cargo:rustc-env=APP_VERSION={}",
+        package["version"].as_str().unwrap()
+    );
+
     println!("cargo:rustc-env=BUILD_TOOLCHAIN={}", toolchain.unwrap());
     println!("cargo:rustc-env=BUILD_TIME={}", chrono::Utc::now());
-
     println!("cargo:rerun-if-changed=build.rs");
 }
