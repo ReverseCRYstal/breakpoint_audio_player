@@ -7,7 +7,6 @@ use crate::misc::{self, form_button, secs_to_string};
 use crate::open_status_guard::Guardian;
 
 use std::collections::{BinaryHeap, VecDeque};
-use std::env::current_dir;
 use std::fs::{copy, File};
 
 use std::io::BufReader;
@@ -63,12 +62,13 @@ pub struct App {
     cur_speed_enum_idx: usize,
     temp_dir: PathBuf,
     changed: bool,
+    adjusted: bool,
 }
 
 // construction
 impl App {
     #[inline(always)]
-    pub fn new(file_to_open: Option<PathBuf>) -> Self {
+    pub fn new(file_to_open: Option<PathBuf>, temp_dir: PathBuf) -> Self {
         let mut player = SingletonPlayer::new();
         let mut toasts = egui_notify::Toasts::default().with_anchor(Anchor::TopRight);
         let mut file_path = None;
@@ -77,6 +77,7 @@ impl App {
             file_to_open
                 .and_then(|v| {
                     file_path = Some(v.clone());
+
                     misc::open(&v, &mut player)
                         .map_err(|caption| {
                             toasts.error(caption.to_string()).set_duration(Some(DUR));
@@ -94,6 +95,7 @@ impl App {
             breakpoints,
             volume: 100,
             changed: false,
+            adjusted: false,
             is_muted: false,
             current_queue_idx: 0,
             bp_to_be_added: None,
@@ -107,7 +109,7 @@ impl App {
             action_queue: VecDeque::new(),
             progress_buffer: Duration::ZERO,
             open_stat_guardian: Default::default(),
-            temp_dir: current_dir().unwrap().join("temp"),
+            temp_dir,
         }
     }
 }
@@ -116,8 +118,10 @@ impl App {
 impl App {
     fn open(&mut self, path: &Path) -> misc::OpenResult {
         self.file_path = Some(path.to_owned());
+        copy(path, self.temp_dir.join("audio.mp3"))?;
         misc::open(path, &mut self.player)
     }
+
     fn save_as_mp3(&self, path: &Path) -> ErrResult {
         copy(self.temp_dir.join("audio.mp3"), path)?;
         Ok(())
@@ -127,23 +131,25 @@ impl App {
         use std::io::prelude::*;
         use zip::write::FileOptions;
 
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        let options = FileOptions::default()
+            .unix_permissions(0o755)
+            .compression_method(zip::CompressionMethod::Stored);
 
         let mut data = serde_json::Map::new();
         data.insert(
             "breakpoints".to_owned(),
             serde_json::to_value(&self.breakpoints)?,
         );
-        let mut zip = zip::ZipWriter::new(std::fs::File::open(path)?);
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(path)?);
 
         zip.start_file("config.json", options)?;
-        zip.write_all(serde_json::to_string(&serde_json::Value::Object(data))?.as_bytes())?;
+        zip.write_all(dbg!(serde_json::to_string(&serde_json::Value::Object(
+            data
+        ))?
+        .as_bytes()))?;
         zip.start_file("audio.mp3", options)?;
         zip.write_all(
-            std::io::read_to_string(BufReader::new(File::open(
-                self.file_path.as_ref().unwrap(),
-            )?))?
-            .as_bytes(),
+            std::io::read_to_string(BufReader::new(File::open(&self.temp_dir)?))?.as_bytes(),
         )?;
         zip.finish()?;
 
@@ -440,13 +446,29 @@ impl App {
                 (self.breakpoints, self.file_category) = self.open(&path)?;
                 self.changed = false;
             }
+            ui.close_menu();
         }
 
         if ui.add_enabled(self.changed, Button::new("保存")).clicked()
             && !self.breakpoints.is_empty()
         {
-            self.save_as_bax(self.file_path.as_ref().unwrap().parent().unwrap())?;
+            if !self.breakpoints.is_empty() {
+                self.file_category = FileCategory::Bax;
+            }
+
+            match self.file_category {
+                FileCategory::Mp3 => {
+                    self.save_as_mp3(&self.file_path.as_ref().unwrap())?;
+                }
+                FileCategory::Bax => {
+                    self.save_as_bax(self.file_path.as_ref().unwrap())?;
+                }
+                _ => {
+                    unreachable!()
+                }
+            }
             self.changed = false;
+            ui.close_menu();
         }
 
         if ui
@@ -459,19 +481,22 @@ impl App {
                 .add_filter("音频文件", &["bax", "mp3"])
                 .save_file()
             {
-                match self.file_category {
-                    FileCategory::Mp3 => {
+                let extension = path.extension().unwrap().to_ascii_lowercase();
+                let extension = extension.to_str().unwrap();
+                match extension {
+                    "mp3" => {
                         self.save_as_mp3(&path)?;
                     }
-                    FileCategory::Bax => {
+                    "bax" => {
                         self.save_as_bax(&path)?;
                     }
                     _ => {
-                        unreachable!()
+                        return Err(anyhow::anyhow!("不支持另存为该格式"));
                     }
                 }
                 self.changed = false;
             }
+            ui.close_menu();
         }
 
         ui.separator();
@@ -488,6 +513,7 @@ impl App {
             self.breakpoints.clear();
             self.current_queue_idx = 0;
             self.changed = false;
+            ui.close_menu();
         }
         ui.separator();
 
@@ -537,8 +563,6 @@ impl App {
 
     #[inline(always)]
     fn breakpoint_menu_ui(&mut self, ui: &mut Ui) {
-        let mut adjusted = false;
-
         if ui
             .add_enabled(
                 self.file_path.is_some(),
@@ -549,19 +573,6 @@ impl App {
             self.timepoint_to_be_added = Some(self.player.get_progress());
             self.open_stat_guardian
                 .set_window_status("添加断点（给定时间）", true);
-        }
-
-        // if ui
-        //     .add_enabled(self.file_path.is_some(), Button::new("添加断点"))
-        //     .clicked()
-        // {
-        //     self.open_stat_guardian.set_window_status("添加断点", true);
-        // }
-
-        if let Some(bp) = self.bp_to_be_added.take() {
-            self.breakpoints.push(bp.clone());
-            self.action_queue.push_front(Action::Add(bp));
-            adjusted = true;
         }
 
         // 608
@@ -593,7 +604,7 @@ impl App {
             self.breakpoints.retain(|v| bp == v);
             self.action_queue.push_front(Action::Remove(bp.clone()));
 
-            adjusted = true;
+            self.adjusted = true;
         }
         if ui
             .add_enabled(!self.breakpoints.is_empty(), Button::new("删除所有断点"))
@@ -602,7 +613,7 @@ impl App {
             self.breakpoints.clear();
             self.action_queue
                 .push_front(Action::ClearAll(self.breakpoints.clone()));
-            adjusted = true;
+            self.adjusted = true;
         }
 
         ui.separator();
@@ -627,24 +638,6 @@ impl App {
         {
             self.player
                 .set_progress(self.prev_breakpoint.as_ref().unwrap().timepoint());
-        }
-
-        if adjusted {
-            self.current_queue_idx += 1;
-            if self.current_queue_idx < self.action_queue.len() {
-                self.action_queue.clone_from(
-                    &self
-                        .action_queue
-                        .range(0..self.current_queue_idx)
-                        .cloned()
-                        .collect(),
-                );
-                self.current_queue_idx = self.action_queue.len();
-            } else if self.current_queue_idx > self.queue_size as usize {
-                self.current_queue_idx -= 1;
-                self.action_queue.pop_back();
-            }
-            self.changed = true;
         }
     }
 }
@@ -689,6 +682,11 @@ impl App {
                             });
                         },
                     );
+
+                    if let Some(bp) = self.bp_to_be_added.take() {
+                        self.breakpoints.push(bp.clone());
+                        self.action_queue.push_front(Action::Add(bp));
+                    }
                 } else {
                     ui.add_space(ui.max_rect().height() / 2.);
                     ui.horizontal(|ui| {
@@ -785,7 +783,7 @@ impl App {
                 ui.vertical_centered(|ui| ui.button("添加").clicked()).inner
             })
             .is_some_and(|v| v.inner.is_some_and(|v| v));
-        //826
+
         if should_add {
             self.open_stat_guardian
                 .set_window_status("添加断点（给定时间）", false);
@@ -793,6 +791,9 @@ impl App {
                 self.timepoint_to_be_added.unwrap(),
                 self.hint_to_be_added.as_ref().unwrap().to_owned(),
             ));
+            self.adjusted = true;
+            self.action_queue
+                .push_front(Action::Add(self.bp_to_be_added.as_ref().unwrap().clone()));
         }
     }
 }
@@ -864,6 +865,24 @@ impl eframe::App for App {
                     .as_str(),
                 );
 
+                if self.adjusted {
+                    self.current_queue_idx += 1;
+                    if self.current_queue_idx < self.action_queue.len() {
+                        self.action_queue.clone_from(
+                            &self
+                                .action_queue
+                                .range(0..self.current_queue_idx)
+                                .cloned()
+                                .collect(),
+                        );
+                        self.current_queue_idx = self.action_queue.len();
+                    } else if self.current_queue_idx > self.queue_size as usize {
+                        self.current_queue_idx -= 1;
+                        self.action_queue.pop_back();
+                    }
+                    self.adjusted = false;
+                    self.changed = true;
+                }
                 self.render_windows(
                     ctx,
                     {

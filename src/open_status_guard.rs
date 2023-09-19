@@ -25,9 +25,4 @@ impl Guardian {
     pub fn set_window_status(&mut self, title: impl ToString, status: bool) {
         self.states.insert(title.to_string(), status);
     }
-
-    #[allow(unused)]
-    pub fn get_window_status(&self, title: impl ToString) -> Option<bool> {
-        self.states.get(&title.to_string()).copied()
-    }
 }

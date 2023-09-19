@@ -12,7 +12,7 @@ mod tests;
 mod timer;
 
 use eframe::egui;
-use std::{env::current_dir, path::PathBuf};
+use std::{env::current_exe, path::PathBuf};
 
 fn main() -> Result<(), anyhow::Error> {
     let argv: Vec<String> = std::env::args().collect();
@@ -23,18 +23,19 @@ fn main() -> Result<(), anyhow::Error> {
         None
     };
 
-    let temp = current_dir().unwrap().join("temp");
-
-    if !temp.exists() {
-        std::fs::create_dir(temp)?;
-    }
-
     eframe::run_native(
         constants::literal::APP_NAME,
         window_option(),
         Box::new(|cc| {
             misc::setup_font(&cc.egui_ctx);
-            Box::new(app::App::new(file_path))
+
+            let temp = current_exe().unwrap().parent().unwrap().join("temp");
+
+            if !temp.exists() {
+                std::fs::create_dir(&temp).unwrap();
+            }
+
+            Box::new(app::App::new(file_path, temp))
         }),
     )
     .map_err(|error| anyhow::anyhow!(error.to_string()))

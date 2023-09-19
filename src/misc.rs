@@ -147,7 +147,7 @@ pub fn open(
 
     let p = match extension {
         crate::constants::literal::EXTENSION_NAME => {
-            let root = unzip(&p, &std::env::current_dir()?)?;
+            let root = unzip(p, &std::env::current_dir()?)?;
             breakpoints = handle_config(&root)?;
             file_category = FileCategory::Bax;
             Ok(root.join("audio.mp3"))
