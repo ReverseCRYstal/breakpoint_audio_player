@@ -49,12 +49,8 @@ pub fn setup_font(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-// #[inline(always)]
-// pub fn form_icon(text: impl Into<String>) -> RichText {
-// }
-
 #[inline(always)]
-pub fn form_button(text: impl Into<String>) -> Button {
+pub fn icon_button(text: impl Into<String>) -> Button {
     Button::new(
         RichText::new(text)
             .family(egui::FontFamily::Name("icon_font".into()))
@@ -64,54 +60,16 @@ pub fn form_button(text: impl Into<String>) -> Button {
     .min_size([50., 50.].into())
 }
 
-pub fn unzip(source_path: &Path, extract_path: &Path) -> Result<PathBuf, anyhow::Error> {
-    let mut archive = zip::ZipArchive::new(BufReader::new(File::open(source_path)?))?;
-    let mut ret: Result<PathBuf, anyhow::Error> = Err(anyhow::anyhow!(
-        "The archived file do not meet specifications."
-    ));
-
-    let iter = archive
-        .file_names()
-        .map(|v| v.to_string())
-        .collect::<Vec<_>>();
-
-    for name in &iter {
-        ret = || -> Result<PathBuf, anyhow::Error> {
-            let mut f = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open(extract_path.join(name))?;
-
-            f.write_all(archive.by_name(name)?.extra_data())?;
-
-            let name = PathBuf::from(name);
-
-            if name
-                .extension()
-                .unwrap()
-                .to_str()
-                .is_some_and(|v| v.eq_ignore_ascii_case("mp3"))
-            {
-                Ok(extract_path.join(name))
-            } else {
-                Err(anyhow::anyhow!(
-                    "The archived file do not meet specifications."
-                ))
-            }
-        }();
-    }
-
-    ret
-}
-
-pub fn handle_config(root: &Path) -> Result<BinaryHeap<Breakpoint>, anyhow::Error> {
+pub fn parse_config(root: &Path) -> Result<BinaryHeap<Breakpoint>, anyhow::Error> {
     use serde_json::Value;
     let mut breakpoints = BinaryHeap::new();
 
     let bad_content_err =
         || -> anyhow::Error { anyhow::anyhow!("文件损坏，无法解析JSON文本") };
-    if let Value::Object(value) =
-        serde_json::from_reader(BufReader::new(File::open(root.join("config.json"))?))?
+    if let Value::Object(value) = serde_json::from_reader(BufReader::new(
+        File::open(root.join("config.json")).unwrap(),
+    ))
+    .unwrap()
     {
         for breakpoint in value
             .get("breakpoints")
@@ -119,8 +77,9 @@ pub fn handle_config(root: &Path) -> Result<BinaryHeap<Breakpoint>, anyhow::Erro
             .as_array()
             .ok_or(bad_content_err())?
             .iter()
+            .cloned()
         {
-            breakpoints.push(serde_json::from_value(breakpoint.clone())?);
+            breakpoints.push(serde_json::from_value(breakpoint).unwrap());
         }
         Ok(breakpoints)
     } else {
@@ -129,7 +88,8 @@ pub fn handle_config(root: &Path) -> Result<BinaryHeap<Breakpoint>, anyhow::Erro
 }
 
 pub fn open(
-    p: &Path,
+    file_to_open: &Path,
+    extract_path: &Path,
     player: &mut SingletonPlayer,
 ) -> Result<(BinaryHeap<Breakpoint>, FileCategory), anyhow::Error> {
     let mut breakpoints = BinaryHeap::new();
@@ -139,7 +99,7 @@ pub fn open(
         anyhow::anyhow!("本软件不支持打开拥有该扩展名的文件")
     };
 
-    let extension = p
+    let extension = file_to_open
         .extension()
         .map(|s| s.to_str())
         .ok_or(unsupported_err())?
@@ -147,15 +107,49 @@ pub fn open(
 
     let p = match extension {
         crate::constants::literal::EXTENSION_NAME => {
-            let root = unzip(p, &std::env::current_dir()?)?;
-            breakpoints = handle_config(&root)?;
+            let mut archive = zip::ZipArchive::new(BufReader::new(File::open(file_to_open)?))?;
+            let mut ret: Result<PathBuf, anyhow::Error> =
+                Err(anyhow::anyhow!(".bax 文件不符合规范"));
+
+            for name in &archive
+                .file_names()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+            {
+                ret = || -> Result<PathBuf, anyhow::Error> {
+                    let mut f = std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .open(extract_path.join(name))?;
+
+                    f.write_all(archive.by_name(name)?.extra_data())?;
+
+                    let name = PathBuf::from(name);
+
+                    if name
+                        .extension()
+                        .unwrap()
+                        .to_str()
+                        .is_some_and(|v| v.eq_ignore_ascii_case("mp3"))
+                    {
+                        Ok(extract_path.to_owned())
+                    } else {
+                        Err(anyhow::anyhow!(".bax 文件不符合规范"))
+                    }
+                }()
+                .or(ret);
+            }
+
+            let root = ret?;
+
+            breakpoints = parse_config(&root)?;
             file_category = FileCategory::Bax;
             Ok(root.join("audio.mp3"))
         }
         "mp3" => {
             file_category = FileCategory::Mp3;
 
-            Ok(p.to_owned())
+            Ok(file_to_open.to_owned())
         }
         _ => Err(unsupported_err()),
     }?;

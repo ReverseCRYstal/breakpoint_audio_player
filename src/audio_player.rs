@@ -71,15 +71,17 @@ impl SingletonPlayer {
 
     pub fn set_progress(&mut self, value: Duration) {
         if !self.is_empty() {
-            // self.progress = value;
             self.timer.overwrite(value);
 
             let paused = self.is_paused();
 
+            dbg!(self.is_empty());
             self.sink.skip_one();
-            self.sink
-                .append(unsafe { self.src.clone().unwrap_unchecked().skip_duration(value) });
 
+            dbg!(self.is_empty());
+            self.sink.append(self.src.clone().unwrap());
+
+            dbg!(self.is_empty());
             if paused {
                 self.pause();
             }
@@ -117,6 +119,12 @@ impl SingletonPlayer {
     #[inline]
     pub fn is_paused(&self) -> bool {
         self.sink.is_paused()
+    }
+
+    #[inline]
+    pub fn reset(&self) {
+        self.sink.clear();
+        self.sink.append(self.src.clone().unwrap());
     }
 
     #[inline]

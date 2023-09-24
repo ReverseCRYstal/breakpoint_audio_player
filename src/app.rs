@@ -3,7 +3,7 @@ use crate::breakpoint::Breakpoint;
 use crate::constants;
 use crate::constants::toasts::DUR;
 use crate::gui;
-use crate::misc::{self, form_button, secs_to_string};
+use crate::misc::{self, icon_button, secs_to_string};
 use crate::open_status_guard::Guardian;
 
 use std::collections::{BinaryHeap, VecDeque};
@@ -70,15 +70,19 @@ impl App {
     #[inline(always)]
     pub fn new(file_to_open: Option<PathBuf>, temp_dir: PathBuf) -> Self {
         let mut player = SingletonPlayer::new();
-        let mut toasts = egui_notify::Toasts::default().with_anchor(Anchor::TopRight);
+        let mut toasts = egui_notify::Toasts::default()
+            .with_anchor(Anchor::TopRight)
+            .with_margin(vec2(3., 32.));
         let mut file_path = None;
+
+        player.pause();
 
         let (breakpoints, file_category) = || -> (BinaryHeap<Breakpoint>, FileCategory) {
             file_to_open
                 .and_then(|v| {
                     file_path = Some(v.clone());
 
-                    misc::open(&v, &mut player)
+                    misc::open(&v, &temp_dir, &mut player)
                         .map_err(|caption| {
                             toasts.error(caption.to_string()).set_duration(Some(DUR));
                         })
@@ -118,8 +122,9 @@ impl App {
 impl App {
     fn open(&mut self, path: &Path) -> misc::OpenResult {
         self.file_path = Some(path.to_owned());
+        let ret = misc::open(path, &self.temp_dir, &mut self.player);
         copy(path, self.temp_dir.join("audio.mp3"))?;
-        misc::open(path, &mut self.player)
+        ret
     }
 
     fn save_as_mp3(&self, path: &Path) -> ErrResult {
@@ -143,10 +148,7 @@ impl App {
         let mut zip = zip::ZipWriter::new(std::fs::File::create(path)?);
 
         zip.start_file("config.json", options)?;
-        zip.write_all(dbg!(serde_json::to_string(&serde_json::Value::Object(
-            data
-        ))?
-        .as_bytes()))?;
+        zip.write_all(serde_json::to_string(&serde_json::Value::Object(data))?.as_bytes())?;
         zip.start_file("audio.mp3", options)?;
         zip.write_all(
             std::io::read_to_string(BufReader::new(File::open(&self.temp_dir)?))?.as_bytes(),
@@ -157,7 +159,6 @@ impl App {
     }
 }
 
-// functions
 impl App {
     fn undo(&mut self) {
         self.current_queue_idx -= 1;
@@ -186,12 +187,11 @@ impl App {
             }
         }
     }
+
+    fn set_progress(&mut self) {}
 }
 
-// window layout
 impl App {
-    /// From egui
-    /// Render title bar
     #[inline(always)]
     fn title_bar_ui(
         &mut self,
@@ -206,8 +206,6 @@ impl App {
                 let visual_mut = ui.visuals_mut();
                 let bg_fill = visual_mut.noninteractive().bg_fill;
                 visual_mut.widgets.inactive.weak_bg_fill = bg_fill;
-                // let stroke = &mut visual_mut.widgets.active.bg_stroke;
-                // *stroke = egui::Stroke::new(stroke.width, bg_fill);
 
                 let title_bar_response = ui.interact(
                     *title_bar_rect,
@@ -302,11 +300,6 @@ impl App {
     }
 }
 
-// literals
-impl App {
-    const SPEED_OPTIONS: [&str; 5] = ["0.5×", "0.75×", "正常", "1.25×", "1.5×"];
-}
-
 // playback ui
 impl App {
     #[inline(always)]
@@ -321,37 +314,35 @@ impl App {
             let resp =
                 if let Some(total_duration) = self.player.total_duration().map(|v| v.as_secs()) {
                     *spacing_mut -= (total_duration.to_string().len() * 2 + 3) as f32 * 8.;
-                    Some(
-                        ui.add_enabled(
-                            true,
-                            Slider::new(&mut self.progress_buffer.as_secs(), 0..=total_duration)
-                                .trailing_fill(true)
-                                .custom_formatter(|v, _| {
-                                    format!(
-                                        "{:} / {:}",
-                                        secs_to_string(v as u64),
-                                        secs_to_string(total_duration)
-                                    )
-                                })
-                                .custom_parser(|v| misc::string_to_secs(v).map(|v| v as f64))
-                                .show_value(true),
-                        ),
+
+                    ui.add_enabled(
+                        true,
+                        Slider::new(&mut self.progress_buffer.as_secs(), 0..=total_duration)
+                            .trailing_fill(true)
+                            .custom_formatter(|v, _| {
+                                format!(
+                                    "{:} / {:}",
+                                    secs_to_string(v as u64),
+                                    secs_to_string(total_duration)
+                                )
+                            })
+                            .custom_parser(|v| misc::string_to_secs(v).map(|v| v as f64))
+                            .show_value(true),
                     )
                 } else {
-                    let _ = ui.add_enabled(
+                    ui.add_enabled(
                         false,
                         Slider::new(&mut place_holder, 0..=1)
                             .show_value(false)
                             .text("00:00"),
-                    );
-
-                    None
+                    )
                 };
+
             if self.progress_buffer < play_progress {
                 self.progress_buffer = play_progress;
             }
-            // 347
-            if resp.is_some_and(|resp| resp.drag_released()) {
+
+            if resp.changed() {
                 self.player.set_progress(self.progress_buffer);
             }
         });
@@ -360,7 +351,10 @@ impl App {
     #[inline(always)]
     fn speed_control(&mut self, ui: &mut Ui) {
         ui.menu_button("播放倍速", |ui| {
-            for (index, text) in Self::SPEED_OPTIONS.iter().enumerate() {
+            for (index, text) in ["0.5×", "0.75×", "正常", "1.25×", "1.5×"]
+                .iter()
+                .enumerate()
+            {
                 let text = if self.cur_speed_enum_idx == index {
                     String::from("✔")
                 } else {
@@ -382,14 +376,14 @@ impl App {
         use constants::icon::{NEXT_BRK_PT, PREV_BRK_PT};
 
         if ui
-            .add_enabled(self.prev_breakpoint.is_some(), form_button(PREV_BRK_PT))
+            .add_enabled(self.prev_breakpoint.is_some(), icon_button(PREV_BRK_PT))
             .clicked()
         {
             self.player
                 .set_progress(self.prev_breakpoint.as_ref().unwrap().timepoint());
         }
         if ui
-            .add_enabled(self.next_breakpoint.is_some(), form_button(NEXT_BRK_PT))
+            .add_enabled(self.next_breakpoint.is_some(), icon_button(NEXT_BRK_PT))
             .clicked()
         {
             self.player
@@ -400,7 +394,6 @@ impl App {
     #[inline(always)]
     fn play_control_buttons(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            let enable_play_btn = !self.player.is_empty();
             let paused = self.player.is_paused();
 
             let play_control_icon = if paused {
@@ -410,16 +403,21 @@ impl App {
             };
 
             if ui
-                .add_enabled(enable_play_btn, form_button(constants::icon::RESET))
+                .add_enabled(
+                    !self.player.is_empty() || !self.player.get_progress().is_zero(),
+                    icon_button(constants::icon::RESET),
+                )
                 .clicked()
             {
                 self.progress_buffer = Duration::ZERO;
-                self.player.set_progress(Duration::ZERO);
-                self.player.pause();
+                self.player.reset();
             }
 
             if ui
-                .add_enabled(enable_play_btn, form_button(play_control_icon))
+                .add_enabled(
+                    dbg!(!self.player.is_empty()),
+                    icon_button(play_control_icon),
+                )
                 .on_hover_text(if paused { "恢复" } else { "暂停" })
                 .clicked()
             {
@@ -524,28 +522,6 @@ impl App {
     }
 
     #[inline(always)]
-    #[allow(unused)]
-    fn appearance_menu_ui(&mut self, ctx: &Context, ui: &mut Ui) -> ErrResult {
-        if ui.button("打开外观文件").clicked() {
-            if let Some(path) = rfd::FileDialog::new()
-                .add_filter("JSON文本文件", &["json"])
-                .set_title("打开主题文件")
-                .pick_file()
-            {
-                let viuals = serde_json::from_str::<egui::Visuals>(
-                    std::io::read_to_string(BufReader::new(File::open(path)?))?.as_str(),
-                )?;
-                ctx.set_visuals(viuals);
-            }
-            ui.close_menu();
-        }
-        // if ui.button("设置外观").clicked() {
-        //     ui.visuals()
-        // }
-        Ok(())
-    }
-
-    #[inline(always)]
     fn help_menu_ui(&mut self, ui: &mut Ui) {
         if ui.button("教程").clicked() {
             self.open_stat_guardian.set_window_status("教程", true);
@@ -573,6 +549,7 @@ impl App {
             self.timepoint_to_be_added = Some(self.player.get_progress());
             self.open_stat_guardian
                 .set_window_status("添加断点（给定时间）", true);
+            ui.close_menu();
         }
 
         // 608
@@ -642,7 +619,6 @@ impl App {
     }
 }
 
-// Main Area
 impl App {
     #[inline(always)]
     fn bottom_panel(&mut self, panel_frame: egui::Frame, ctx: &Context) {
@@ -715,7 +691,6 @@ impl App {
     }
 }
 
-// Windows
 impl App {
     fn render_windows(&mut self, ctx: &Context, center_pos: egui::Pos2) {
         let collapsible = false;
@@ -911,7 +886,10 @@ impl eframe::App for App {
                                         (self.breakpoints, self.file_category) = v;
                                     }
                                     Err(e) => {
-                                        self.toasts.error(e.to_string()).set_duration(Some(DUR));
+                                        self.toasts
+                                            .error(e.to_string())
+                                            .set_closable(true)
+                                            .set_duration(Some(DUR));
                                     }
                                 }
                                 self.changed = false;
