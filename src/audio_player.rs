@@ -55,12 +55,6 @@ impl SingletonPlayer {
         })?;
         Ok(())
     }
-
-    pub fn clear(&mut self) {
-        self.total_duration = None;
-        self.sink.clear();
-        self.src = None;
-    }
 }
 
 impl SingletonPlayer {
@@ -75,13 +69,11 @@ impl SingletonPlayer {
 
             let paused = self.is_paused();
 
-            dbg!(self.is_empty());
-            self.sink.skip_one();
+            self.sink.stop();
 
-            dbg!(self.is_empty());
-            self.sink.append(self.src.clone().unwrap());
+            self.sink
+                .append(self.src.clone().unwrap().skip_duration(value));
 
-            dbg!(self.is_empty());
             if paused {
                 self.pause();
             }
@@ -122,9 +114,18 @@ impl SingletonPlayer {
     }
 
     #[inline]
-    pub fn reset(&self) {
+    pub fn reset(&mut self) {
+        self.timer.clear();
         self.sink.clear();
         self.sink.append(self.src.clone().unwrap());
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.timer.clear();
+        self.src = None;
+        self.total_duration = None;
+        self.sink.clear();
     }
 
     #[inline]

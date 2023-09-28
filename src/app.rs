@@ -57,7 +57,7 @@ pub struct App {
     timepoint_to_be_added: Option<Duration>,
     bp_to_be_added: Option<Breakpoint>,
     volume: u8,
-    progress_buffer: Duration,
+    progress_buffer: u64,
     open_stat_guardian: Guardian,
     cur_speed_enum_idx: usize,
     temp_dir: PathBuf,
@@ -108,10 +108,10 @@ impl App {
             next_breakpoint: None,
             prev_breakpoint: None,
             cur_speed_enum_idx: 2,
-            should_confirm_exit: true,
+            should_confirm_exit: false,
             queue_size: u8::MAX as u16,
             action_queue: VecDeque::new(),
-            progress_buffer: Duration::ZERO,
+            progress_buffer: 0,
             open_stat_guardian: Default::default(),
             temp_dir,
         }
@@ -174,10 +174,9 @@ impl App {
     }
 
     fn redo(&mut self) {
-        self.current_queue_idx += 1;
         match &self.action_queue[self.current_queue_idx] {
             Action::Remove(bp) => {
-                self.breakpoints.retain(|v| *v != *bp);
+                self.breakpoints.retain(|v: &Breakpoint| *v != *bp);
             }
             Action::Add(bp) => {
                 self.breakpoints.push(bp.clone());
@@ -186,9 +185,8 @@ impl App {
                 self.breakpoints.clear();
             }
         }
+        self.current_queue_idx += 1;
     }
-
-    fn set_progress(&mut self) {}
 }
 
 impl App {
@@ -240,7 +238,7 @@ impl App {
 
                         if ui
                             .add_enabled(
-                                self.current_queue_idx != self.breakpoints.len(),
+                                self.current_queue_idx != self.action_queue.len(),
                                 Button::new("重做"),
                             )
                             .clicked()
@@ -317,7 +315,7 @@ impl App {
 
                     ui.add_enabled(
                         true,
-                        Slider::new(&mut self.progress_buffer.as_secs(), 0..=total_duration)
+                        Slider::new(&mut self.progress_buffer, 0..=total_duration)
                             .trailing_fill(true)
                             .custom_formatter(|v, _| {
                                 format!(
@@ -338,12 +336,11 @@ impl App {
                     )
                 };
 
-            if self.progress_buffer < play_progress {
-                self.progress_buffer = play_progress;
-            }
-
-            if resp.changed() {
-                self.player.set_progress(self.progress_buffer);
+            if resp.drag_released() {
+                self.player
+                    .set_progress(Duration::from_secs(self.progress_buffer));
+            } else {
+                self.progress_buffer = play_progress.as_secs();
             }
         });
     }
@@ -409,15 +406,11 @@ impl App {
                 )
                 .clicked()
             {
-                self.progress_buffer = Duration::ZERO;
                 self.player.reset();
             }
 
             if ui
-                .add_enabled(
-                    dbg!(!self.player.is_empty()),
-                    icon_button(play_control_icon),
-                )
+                .add_enabled(!self.player.is_empty(), icon_button(play_control_icon))
                 .on_hover_text(if paused { "恢复" } else { "暂停" })
                 .clicked()
             {
@@ -456,7 +449,7 @@ impl App {
 
             match self.file_category {
                 FileCategory::Mp3 => {
-                    self.save_as_mp3(&self.file_path.as_ref().unwrap())?;
+                    self.save_as_mp3(self.file_path.as_ref().unwrap())?;
                 }
                 FileCategory::Bax => {
                     self.save_as_bax(self.file_path.as_ref().unwrap())?;
@@ -506,7 +499,6 @@ impl App {
             self.action_queue.clear();
             self.next_breakpoint = None;
             self.prev_breakpoint = None;
-            self.progress_buffer = Duration::ZERO;
             self.player.clear();
             self.breakpoints.clear();
             self.current_queue_idx = 0;
@@ -565,7 +557,7 @@ impl App {
                 None => self
                     .next_breakpoint
                     .as_ref()
-                    .and(self.prev_breakpoint.as_ref())
+                    .or(self.prev_breakpoint.as_ref())
                     .unwrap(),
                 Some((next, prev)) => {
                     let progress = self.player.get_progress().as_millis();
@@ -579,7 +571,8 @@ impl App {
                 }
             };
             self.breakpoints.retain(|v| bp == v);
-            self.action_queue.push_front(Action::Remove(bp.clone()));
+            self.action_queue
+                .push_front(Action::Remove(dbg!(bp.clone())));
 
             self.adjusted = true;
         }
@@ -649,6 +642,11 @@ impl App {
             .max_width(f32::INFINITY)
             .stick_to_bottom(true)
             .show(ui, |ui| {
+                if let Some(bp) = self.bp_to_be_added.take() {
+                    self.breakpoints.push(bp.clone());
+                    self.action_queue.push_front(Action::Add(bp));
+                }
+
                 if self.breakpoints.is_empty() {
                     ui.allocate_ui_at_rect(
                         egui::Rect::from_center_size(rest_rect.center(), rest_rect.size() / 2.),
@@ -658,22 +656,20 @@ impl App {
                             });
                         },
                     );
-
-                    if let Some(bp) = self.bp_to_be_added.take() {
-                        self.breakpoints.push(bp.clone());
-                        self.action_queue.push_front(Action::Add(bp));
-                    }
                 } else {
                     ui.add_space(ui.max_rect().height() / 2.);
                     ui.horizontal(|ui| {
                         let mut do_assign = true;
                         let progress = self.player.get_progress();
 
-                        for breakpoint in &self.breakpoints {
+                        self.next_breakpoint = None;
+                        self.prev_breakpoint = None;
+
+                        for breakpoint in self.breakpoints.iter().rev() {
                             if progress < breakpoint.timepoint() {
-                                self.prev_breakpoint = Some(breakpoint.clone());
-                            } else if do_assign {
                                 self.next_breakpoint = Some(breakpoint.clone());
+                            } else if do_assign {
+                                self.prev_breakpoint = Some(breakpoint.clone());
                                 do_assign = false;
                             }
                             let resp = ui.add(Button::new(secs_to_string(
@@ -764,7 +760,7 @@ impl App {
                 .set_window_status("添加断点（给定时间）", false);
             self.bp_to_be_added = Some(Breakpoint::new(
                 self.timepoint_to_be_added.unwrap(),
-                self.hint_to_be_added.as_ref().unwrap().to_owned(),
+                self.hint_to_be_added.take().unwrap(),
             ));
             self.adjusted = true;
             self.action_queue
@@ -787,8 +783,6 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &Context, frame: &mut eframe::Frame) {
-        // ctx.set_debug_on_hover(true);
-
         if !(self.player.is_empty() || self.player.is_paused()) {
             ctx.request_repaint();
         }

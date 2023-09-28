@@ -22,7 +22,7 @@ pub mod literal {
     pub const EXTENSION_NAME: &str = "bax";
     pub const APP_NAME: &str = "断点音频播放器";
     // pre-alpha alpha beta gamma
-    pub const TEST_VERSION: &str = "beta";
+    pub const TEST_VERSION: &str = "Release";
 }
 
 pub mod toasts {
